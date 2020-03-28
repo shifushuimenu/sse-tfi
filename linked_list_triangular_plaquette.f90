@@ -1,17 +1,7 @@
 MODULE linked_list
 
-!IMPROVE: move type definition to another module 
-! 
-! Configuration of the simulation cell 
-! for a given SSE configuration 
-TYPE :: tConfig 
-   INTEGER :: n_sites   ! Number of lattice sites 
-   INTEGER :: LL        ! Total number of SSE propagation steps (including idientities)
-   INTEGER :: n_legs    ! Total number of vertex legs: n_legs=6*n6leg+4*n4leg+2*n2leg
-   INTEGER :: n6leg     ! Number of triangular plaquette (i.e. 6-leg) vertices
-   INTEGER :: n4leg     ! Number of Ising (i.e. 4-leg) vertices 
-   INTEGER :: n2leg     ! Number of constant or spin-flip (i.e. 2-leg) vertices 
-END TYPE 
+    USE SSE_configuration 
+    
 
     CONTAINS
 

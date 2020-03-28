@@ -1,4 +1,3 @@
-
 SUBROUTINE diagonal_update_plaquette(&
      spins, opstring, config, probtables, update_type )
 ! **************************************************
@@ -7,7 +6,9 @@ SUBROUTINE diagonal_update_plaquette(&
 ! at every propagation step.
 ! **************************************************
 
-use configuration
+use types
+use SSE_configuration
+
 use probtables
 use various
 !remove
@@ -25,15 +26,15 @@ integer, intent(in) :: update_type   ! if update_type = 1 => "A-site update, =2 
 integer :: ip, i1, i2, index1, index2, k, l, ir, index1_OS, index2_OS!remove l, index1_OS, index2_OS
 integer :: k1, k2
 
-double precision :: P_plus, P_minus, P_add, P_remove
-double precision :: prob, prob2, eta
+real(dp) :: P_plus, P_minus, P_add, P_remove
+real(dp) :: prob, prob2, eta
 
 ! propagated spin configuration at a given propagation step
 integer, allocatable :: spins2(:) 
 
-double precision :: ran2 !!!! Is this necessary ?????????
+real(dp) :: ran2 !!!! Is this necessary ?????????
 !remove
-double precision :: eta2, C
+real(dp) :: eta2, C
 
 logical :: FOUND, OP_INSERTED
 
@@ -46,10 +47,10 @@ ALLOCATE(spins2( SIZE(spins,1) ))
 spins2(:) = spins(:)
 
 ! Initialize P_add and P_remove
-P_remove = float((LL - n_exp + 1)) / ( float(LL- n_exp + 1) + beta*sum_all_diagmatrix_elements )
-P_add = beta*sum_all_diagmatrix_elements / ( float(LL-n_exp) + beta*sum_all_diagmatrix_elements )
+P_remove = float(( config%LL - config%n_exp + 1)) / ( float(config%LL- config%n_exp + 1) + beta*sum_all_diagmatrix_elements )
+P_add = beta*sum_all_diagmatrix_elements / ( float(config%LL-config%n_exp) + beta*sum_all_diagmatrix_elements )
 
-do ip=1,LL
+do ip=1, config%LL
 
   i1 = opstring(ip)%i 
   i2 = opstring(ip)%j
@@ -94,32 +95,32 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
     if (index1.ne.index2) then		!Ising operator, index1 and index2 not equal 0 by construction
     if ( J_ij(index1, index2).gt.0 ) then !AFM
       if (spins2(index1).ne.spins2(index2)) then
-	OP_INSERTED = .TRUE.
-	if (index1.lt.index2) then
-	  opstring(ip)%i = index1
-	  opstring(ip)%j = index2
-	else
-	  opstring(ip)%i = index2
-	  opstring(ip)%j = index1
-	endif
-! 	Expansion order changes as n_exp -> n_exp + 1
-	n_exp = n_exp + 1; n4leg = n4leg + 1
+        OP_INSERTED = .TRUE.
+        if (index1.lt.index2) then
+          opstring(ip)%i = index1
+          opstring(ip)%j = index2
+        else
+          opstring(ip)%i = index2
+          opstring(ip)%j = index1
+        endif
+        ! 	Expansion order changes as n_exp -> n_exp + 1
+	      config%n_exp = config%n_exp + 1; config%n4leg = config%n4leg + 1
         ! update P_add and  P_remove
-        P_add = beta*sum_all_diagmatrix_elements / ( float(LL-n_exp) + beta*sum_all_diagmatrix_elements )
-        P_remove = float((LL - n_exp + 1)) / ( float(LL- n_exp + 1) + beta*sum_all_diagmatrix_elements )
+        P_add = beta*sum_all_diagmatrix_elements / ( float(config%LL-config%n_exp) + beta*sum_all_diagmatrix_elements )
+        P_remove = float((config%LL - config%n_exp + 1)) / ( float(config%LL- config%n_exp + 1) + beta*sum_all_diagmatrix_elements )
       endif
     elseif ( J_ij(index1,index2).lt.0 ) then !FM	
 !!!!!! Improve: What if M_ij = 0 ???????
       if (spins2(index1).eq.spins2(index2)) then
-	OP_INSERTED = .TRUE.
-	if (index1.lt.index2) then
-	  opstring(ip)%i = index1
-	  opstring(ip)%j = index2
-	else
-	  opstring(ip)%i = index2
-	  opstring(ip)%j = index1
-	endif
-	n_exp = n_exp + 1; n4leg = n4leg + 1
+        OP_INSERTED = .TRUE.
+        if (index1.lt.index2) then
+          opstring(ip)%i = index1
+          opstring(ip)%j = index2
+        else
+          opstring(ip)%i = index2
+          opstring(ip)%j = index1
+        endif
+        config%n_exp = config%n_exp + 1; config%n4leg = config%n4leg + 1
         ! update P_add and  P_remove
         P_add = beta*sum_all_diagmatrix_elements / ( float(LL-n_exp) + beta*sum_all_diagmatrix_elements )
         P_remove = float((LL - n_exp + 1)) / ( float(LL- n_exp + 1) + beta*sum_all_diagmatrix_elements )
@@ -130,14 +131,14 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
     endif
     else !index1.eq.index2 => constant operator to be inserted
     ! There is no constraint on inserting constants
-	OP_INSERTED = .TRUE.
-	opstring(ip)%i = index1
-	opstring(ip)%j = index2
-	
-	n_exp = n_exp + 1; n2leg = n2leg + 1	
+        OP_INSERTED = .TRUE.
+        opstring(ip)%i = index1
+        opstring(ip)%j = index2
+
+        config%n_exp = config%n_exp + 1; config%n2leg = config%n2leg + 1	
         ! update P_add and  P_remove
-        P_add = beta*sum_all_diagmatrix_elements / ( float(LL-n_exp) + beta*sum_all_diagmatrix_elements )
-        P_remove = float((LL - n_exp + 1)) / ( float(LL- n_exp + 1) + beta*sum_all_diagmatrix_elements )
+        P_add = beta*sum_all_diagmatrix_elements / ( float(config%LL-config%n_exp) + beta*sum_all_diagmatrix_elements )
+        P_remove = float((config%LL - config%n_exp + 1)) / ( float(config%LL- config%n_exp + 1) + beta*sum_all_diagmatrix_elements )
      endif !index1.ne.index2
 
    else
@@ -150,10 +151,10 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
     FOUND = .FALSE.; k=1
     do while (.not.FOUND)
       if (k .le. (N_plaquettes * prob) ) then
-	k=k+1
+	      k=k+1
       else
-	plaq_idx = k
-	FOUND=.TRUE.
+        plaq_idx = k
+        FOUND=.TRUE.
       endif
     enddo  
   
@@ -199,10 +200,10 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
      else
        opstring(ip)%PRIVILEGED_LEG_IS_MAJORITY_LEG = .FALSE.
      endif     
-     n_exp = n_exp + 1; n6leg = n6leg + 1 
+     config%n_exp = config%n_exp + 1; config%n6leg = config%n6leg + 1 
      ! update P_add and  P_remove
-     P_add = beta*sum_all_diagmatrix_elements / ( float(LL-n_exp) + beta*sum_all_diagmatrix_elements )
-     P_remove = float((LL - n_exp + 1)) / ( float(LL- n_exp + 1) + beta*sum_all_diagmatrix_elements )
+     P_add = beta*sum_all_diagmatrix_elements / ( float(config%LL-config%n_exp) + beta*sum_all_diagmatrix_elements )
+     P_remove = float((config%LL - config%n_exp + 1)) / ( float(config%LL- config%n_exp + 1) + beta*sum_all_diagmatrix_elements )
      
   endif 
   
@@ -212,7 +213,6 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
   
 endif !identity encountered
 
-  
   ! Ising bond operator, Ising triangular plaquette, or constant encountered: 
   ! Try replacement:  Ising plaquette / Ising bond / const => identity
   ! Expansion order changes as n_exp -> n_exp - 1
@@ -224,18 +224,18 @@ endif !identity encountered
     if (eta.le.P_minus) then
       opstring(ip)%i = 0
       opstring(ip)%j = 0
-      n_exp = n_exp - 1
+      config%n_exp = config%n_exp - 1
       ! update P_add and  P_remove
-      P_add = beta*sum_all_diagmatrix_elements / ( float(LL-n_exp) + beta*sum_all_diagmatrix_elements )
-      P_remove = float((LL - n_exp + 1)) / ( float(LL- n_exp + 1) + beta*sum_all_diagmatrix_elements )
+      P_add = beta*sum_all_diagmatrix_elements / ( float(config%LL-config%n_exp) + beta*sum_all_diagmatrix_elements )
+      P_remove = float((config%LL - config%n_exp + 1)) / ( float(config%LL- config%n_exp + 1) + beta*sum_all_diagmatrix_elements )
       
     if (i1 .lt. 0) then ! Triangular plaquette operators are identified by opstring(ip)%i < 0 and opatring(ip)%j < 0. 
-       n6leg = n6leg - 1  ! plaquette operator removed
+       config%n6leg = config%n6leg - 1  ! plaquette operator removed
     else ! constant or plaquette operator 
       if ( i1.ne.i2 ) then ! Ising operator removed
-	n4leg = n4leg - 1
+      	config%n4leg = config%n4leg - 1
       elseif (i1.eq.i2) then ! constant removed ! IMPROVE: This "elseif" can be replace directly by "else"
-	n2leg = n2leg - 1
+      	config%n2leg = config%n2leg - 1
       else
           STOP "diagonal_update(): ERROR: trying to remove unknown operator type"
       endif 
@@ -276,6 +276,7 @@ PURE FUNCTION binary_search(cumul_prob_table, prob) RESULT(idx)
 !    idx:  The sampled index.
 ! ***********************************************************************
 
+    USE types
     IMPLICIT NONE    
     REAL(dp), INTENT(IN) :: cumul_prob_table(:)
     REAL(dp), INTENT(IN) :: prob    
