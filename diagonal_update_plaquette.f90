@@ -1,40 +1,58 @@
-SUBROUTINE diagonal_update_plaquette(&
-     spins, opstring, config, probtables, update_type )
+! TODO:
+!   - Implement translation invariance of probability tables 
+!     and array indicating whether a bond is FM or AFM.
+
+module diagonal_update
+  use types
+  implicit none 
+
+type t_ProbTable 
+  ! cumulative probability tables for 
+  !  - the first index (=first site on which the Ising operator acts)
+  !  - the second index (given selection of the first index)
+  ! of Ising (4-leg) bond operators 
+  real(dp), allocatable :: P_cumulfirst(:)
+  real(dp), allocatable :: P_cumulsecond(:,:)
+  real(dp) :: sum_all_diagmatrix_elements_2or4leg
+  real(dp) :: sum_all_diagmatrix_elements
+end type 
+
+  contains 
+
+SUBROUTINE diagonal_update_plaquette( beta, Jij_sign, &
+     spins, opstring, config, probtable, plaquettes, update_type )
 ! **************************************************
 ! Attempt to carry out replacements of the kind
 !     id <--> diag. operator
 ! at every propagation step.
 ! **************************************************
 
-use types
 use SSE_configuration
+use lattice
 
-use probtables
-use various
-!remove
-use whereweare
-!remove
-
+! use probtables 
 implicit none
 
+real(dp), intent(in) :: beta        ! inverse temperature 
+integer, intent(in) :: Jij_sign(:,:)  ! sign of the interaction bond (i,j): FM (<0) or AFM (>0)
+                                      ! Note: If J_ij(i,j) == 0, then the corresponding bond will never be sampled
+                                      !       from the cumulative probability table. 
 integer, intent(in) :: spins(:)
-type(tBondOperator), intent(inout) :: opstring(:)
-type(tConfig), intent(inout) :: config
-   intent(in) :: probtables ???
+type(t_BondOperator), intent(inout) :: opstring(:)
+type(t_Config), intent(inout) :: config
+type(t_ProbTable), intent(in) :: probtable
+type(t_Plaquette), intent(in) :: plaquettes(:)
 integer, intent(in) :: update_type   ! if update_type = 1 => "A-site update, =2 => "B-site update", =3 => "C-site update"
 
-integer :: ip, i1, i2, index1, index2, k, l, ir, index1_OS, index2_OS!remove l, index1_OS, index2_OS
-integer :: k1, k2
+integer :: ip, i1, i2, index1, index2, k
+
+integer :: plaq_idx
 
 real(dp) :: P_plus, P_minus, P_add, P_remove
-real(dp) :: prob, prob2, eta
+real(dp) :: prob
 
 ! propagated spin configuration at a given propagation step
 integer, allocatable :: spins2(:) 
-
-real(dp) :: ran2 !!!! Is this necessary ?????????
-!remove
-real(dp) :: eta2, C
 
 logical :: FOUND, OP_INSERTED
 
@@ -47,8 +65,10 @@ ALLOCATE(spins2( SIZE(spins,1) ))
 spins2(:) = spins(:)
 
 ! Initialize P_add and P_remove
-P_remove = float(( config%LL - config%n_exp + 1)) / ( float(config%LL- config%n_exp + 1) + beta*sum_all_diagmatrix_elements )
-P_add = beta*sum_all_diagmatrix_elements / ( float(config%LL-config%n_exp) + beta*sum_all_diagmatrix_elements )
+P_remove = float(( config%LL - config%n_exp + 1)) &
+          / ( float(config%LL- config%n_exp + 1) + beta*probtable%sum_all_diagmatrix_elements )
+P_add = beta*probtable%sum_all_diagmatrix_elements &
+          / ( float(config%LL-config%n_exp) + beta*probtable%sum_all_diagmatrix_elements )
 
 do ip=1, config%LL
 
@@ -59,10 +79,10 @@ do ip=1, config%LL
 IF( (i1 == 0).AND.(i2 == 0) ) THEN
 
     ! heat bath solutions to the detailed balance condition equations
-    P_plus = P_add
-    eta = ran2(idum)
+    P_plus = P_add    
+    call random_number(prob)
         
-  IF( eta <= P_plus ) THEN 
+  IF( prob <= P_plus ) THEN 
   ! try to insert an operator  
   OP_INSERTED = .FALSE.
  
@@ -72,19 +92,19 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
    !     - a triangular plaquette operator
    !     - or a diagonal 2-leg or 4-leg vertex.
    ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-   prob2 = ran2(idum)
+   call random_number(prob)
    
-   IF( prob2 <= (sum_all_diagmatrix_elements_2or4leg / sum_all_diagmatrix_elements) ) THEN
+   IF( prob <= (probtable%sum_all_diagmatrix_elements_2or4leg / probtable%sum_all_diagmatrix_elements) ) THEN
   ! Try inserting an Ising operator or a constant at propagation step ip
   ! assuming that all insertions are allowed.
     
     ! Heat bath algorithm for first index (=first site on which the Ising operator acts)
-    prob = ran2(idum)  
-    index1 = binary_search( P_cumulfirst(:), prob )
+    call random_number(prob)
+    index1 = binary_search( probtable%P_cumulfirst(:), prob )
             
     ! Heat bath algorithm for the second index given the selection of the first index
-    prob = ran2(idum)  
-    index2 = binary_search( P_cumulsecond(index1, :), prob )
+    call random_number(prob)
+    index2 = binary_search( probtable%P_cumulsecond(index1, :), prob )
     
 
 ! Check whether the insertion of the Ising operator is allowed at propagation step ip,
@@ -92,8 +112,8 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
 ! spin configuration at ip. If it is forbidden, repeat the selection process until an operator 
 ! is inserted. There is no risk of the search never ending as a constant can always be inserted (for h unequal 0 !).
 
-    if (index1.ne.index2) then		!Ising operator, index1 and index2 not equal 0 by construction
-    if ( J_ij(index1, index2).gt.0 ) then !AFM
+    if (index1.ne.index2) then	!Ising operator, index1 and index2 not equal 0 by construction
+    if ( Jij_sign(index1, index2).gt.0 ) then !AFM
       if (spins2(index1).ne.spins2(index2)) then
         OP_INSERTED = .TRUE.
         if (index1.lt.index2) then
@@ -106,11 +126,12 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
         ! 	Expansion order changes as n_exp -> n_exp + 1
 	      config%n_exp = config%n_exp + 1; config%n4leg = config%n4leg + 1
         ! update P_add and  P_remove
-        P_add = beta*sum_all_diagmatrix_elements / ( float(config%LL-config%n_exp) + beta*sum_all_diagmatrix_elements )
-        P_remove = float((config%LL - config%n_exp + 1)) / ( float(config%LL- config%n_exp + 1) + beta*sum_all_diagmatrix_elements )
-      endif
-    elseif ( J_ij(index1,index2).lt.0 ) then !FM	
-!!!!!! Improve: What if M_ij = 0 ???????
+        P_remove = float(( config%LL - config%n_exp + 1)) &
+          / ( float(config%LL- config%n_exp + 1) + beta*probtable%sum_all_diagmatrix_elements )
+        P_add = beta*probtable%sum_all_diagmatrix_elements &
+          / ( float(config%LL-config%n_exp) + beta*probtable%sum_all_diagmatrix_elements )
+    endif
+    elseif ( Jij_sign(index1,index2).lt.0 ) then !FM	
       if (spins2(index1).eq.spins2(index2)) then
         OP_INSERTED = .TRUE.
         if (index1.lt.index2) then
@@ -122,12 +143,11 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
         endif
         config%n_exp = config%n_exp + 1; config%n4leg = config%n4leg + 1
         ! update P_add and  P_remove
-        P_add = beta*sum_all_diagmatrix_elements / ( float(LL-n_exp) + beta*sum_all_diagmatrix_elements )
-        P_remove = float((LL - n_exp + 1)) / ( float(LL- n_exp + 1) + beta*sum_all_diagmatrix_elements )
-      endif
-    elseif (abs(J_ij(index1,index2)).le.prec) then
-! 	print*, "J_ij.eq.0", J_ij(index1,index2)
-! 	stop
+        P_remove = float(( config%LL - config%n_exp + 1)) &
+          / ( float(config%LL- config%n_exp + 1) + beta*probtable%sum_all_diagmatrix_elements )
+        P_add = beta*probtable%sum_all_diagmatrix_elements &
+          / ( float(config%LL-config%n_exp) + beta*probtable%sum_all_diagmatrix_elements )
+    endif
     endif
     else !index1.eq.index2 => constant operator to be inserted
     ! There is no constraint on inserting constants
@@ -137,21 +157,23 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
 
         config%n_exp = config%n_exp + 1; config%n2leg = config%n2leg + 1	
         ! update P_add and  P_remove
-        P_add = beta*sum_all_diagmatrix_elements / ( float(config%LL-config%n_exp) + beta*sum_all_diagmatrix_elements )
-        P_remove = float((config%LL - config%n_exp + 1)) / ( float(config%LL- config%n_exp + 1) + beta*sum_all_diagmatrix_elements )
-     endif !index1.ne.index2
+        P_remove = float(( config%LL - config%n_exp + 1)) &
+          / ( float(config%LL- config%n_exp + 1) + beta*probtable%sum_all_diagmatrix_elements )
+        P_add = beta*probtable%sum_all_diagmatrix_elements &
+          / ( float(config%LL-config%n_exp) + beta*probtable%sum_all_diagmatrix_elements )
+   endif !index1.ne.index2
 
    else
-  ! Try to insert a triangular plaquette operator 
-  ! Select the plaquette number 
-  prob = ran2(idum)
+    ! Try to insert a triangular plaquette operator 
+    ! Select the plaquette number 
+    call random_number(prob)
 
     ! IMPROVE: There must be a simpler expression if all plaquettes have the 
     ! same weight. 
     FOUND = .FALSE.; k=1
     do while (.not.FOUND)
-      if (k .le. (N_plaquettes * prob) ) then
-	      k=k+1
+      if (k <= (config%n_plaquettes * prob) ) then
+        k=k+1
       else
         plaq_idx = k
         FOUND=.TRUE.
@@ -163,8 +185,9 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
   ! Plaquettes on maximally frustrated spin configurations have zero weight (see Ref. [1]).
   
   ! Choose between A-site, B-site, or C-site update 
-  ! by identifying a particular sublattice as the "A-sites".
-  ! It is only here that the update type enters. 
+  ! by identifying a particular sublattice as the "A-sites", which are 
+  ! by definition the 'privileged' sites (see Ref. [1]).
+  ! It is only here that the update type of the plaquette update enters. 
   if (update_type == A_UPDATE) then
     ir_A = plaquettes(plaq_idx)%Asite
     ir_B = plaquettes(plaq_idx)%Bsite
@@ -202,14 +225,16 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
      endif     
      config%n_exp = config%n_exp + 1; config%n6leg = config%n6leg + 1 
      ! update P_add and  P_remove
-     P_add = beta*sum_all_diagmatrix_elements / ( float(config%LL-config%n_exp) + beta*sum_all_diagmatrix_elements )
-     P_remove = float((config%LL - config%n_exp + 1)) / ( float(config%LL- config%n_exp + 1) + beta*sum_all_diagmatrix_elements )
-     
+     P_remove = float(( config%LL - config%n_exp + 1)) &
+      / ( float(config%LL- config%n_exp + 1) + beta*probtable%sum_all_diagmatrix_elements )
+     P_add = beta*probtable%sum_all_diagmatrix_elements &
+      / ( float(config%LL-config%n_exp) + beta*probtable%sum_all_diagmatrix_elements )
+
   endif 
   
    endif ! plaquette or (2-leg or 4-leg) vertex ?
 
-  endif !if(eta.le.P_plus)
+  endif !if(prob <= P_plus)
   
 endif !identity encountered
 
@@ -219,23 +244,25 @@ endif !identity encountered
   if ((i1.ne.0).and.(i2.ne.0)) then
 
     P_minus = P_remove
-    eta = ran2(idum)
+    call random_number(prob)
      
-    if (eta.le.P_minus) then
+    if (prob <= P_minus) then
       opstring(ip)%i = 0
       opstring(ip)%j = 0
       config%n_exp = config%n_exp - 1
       ! update P_add and  P_remove
-      P_add = beta*sum_all_diagmatrix_elements / ( float(config%LL-config%n_exp) + beta*sum_all_diagmatrix_elements )
-      P_remove = float((config%LL - config%n_exp + 1)) / ( float(config%LL- config%n_exp + 1) + beta*sum_all_diagmatrix_elements )
-      
+      P_remove = float(( config%LL - config%n_exp + 1)) &
+        / ( float(config%LL- config%n_exp + 1) + beta*probtable%sum_all_diagmatrix_elements )
+      P_add = beta*probtable%sum_all_diagmatrix_elements &
+        / ( float(config%LL-config%n_exp) + beta*probtable%sum_all_diagmatrix_elements )
+  
     if (i1 .lt. 0) then ! Triangular plaquette operators are identified by opstring(ip)%i < 0 and opatring(ip)%j < 0. 
        config%n6leg = config%n6leg - 1  ! plaquette operator removed
     else ! constant or plaquette operator 
       if ( i1.ne.i2 ) then ! Ising operator removed
-      	config%n4leg = config%n4leg - 1
+        config%n4leg = config%n4leg - 1
       elseif (i1.eq.i2) then ! constant removed ! IMPROVE: This "elseif" can be replace directly by "else"
-      	config%n2leg = config%n2leg - 1
+        config%n2leg = config%n2leg - 1
       else
           STOP "diagonal_update(): ERROR: trying to remove unknown operator type"
       endif 
@@ -288,7 +315,7 @@ PURE FUNCTION binary_search(cumul_prob_table, prob) RESULT(idx)
 #ifdef DEBUG
     IF(SUM(cumul_prob_table(:)) /= 1.d0) STOP &
           "binary_search(): ERROR: cumul. prob. table is not normalized."
-#endif DEBUG    
+#endif 
     FOUND = .FALSE.
     k1=1
     k2=SIZE(cumul_prob_table, 1);
@@ -316,3 +343,5 @@ PURE FUNCTION binary_search(cumul_prob_table, prob) RESULT(idx)
     ENDDO
 
 END FUNCTION binary_search
+
+end module 

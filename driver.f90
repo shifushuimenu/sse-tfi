@@ -4,7 +4,7 @@ PROGRAM driver
     
     INTEGER, POINTER :: neigh(:,:)
     INTEGER, POINTER :: sublattice(:)
-    TYPE (tPlaquette), POINTER :: plaquettes(:)
+    TYPE (t_Plaquette), POINTER :: plaquettes(:)
         
     integer :: nx=3, ny=3
     

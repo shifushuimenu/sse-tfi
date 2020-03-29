@@ -3,16 +3,12 @@ module cluster_update
 use types, only: dp
 use SSE_configuration 
 implicit none 
+private
+
+public quantum_cluster_update_plaquette
 
 ! convenient labels 
 integer, parameter :: UP=+1, DOWN=-1
-integer, parameter :: MAX_GHOSTLEGS = 6
-! operator types 
-integer, parameter :: IDENTITY = 100
-integer, parameter :: ISING_BOND = 10
-integer, parameter :: TWO_LEG = 20, SPIN_FLIP = 21, CONSTANT = 22
-integer, parameter :: TRIANGULAR_PLAQUETTE = 30
-
 ! for triangular-plaquette based update 
 integer, parameter :: A_LEG=1, B_LEG=2, C_LEG=3
 
@@ -31,7 +27,7 @@ pure function gleg_to_ir(op, gleg) result(ir)
 ! ***************************************************************
 
     implicit none 
-    type(tBondOperator), intent(in) :: op   ! operator at propagation step ip 
+    type(t_BondOperator), intent(in) :: op   ! operator at propagation step ip 
     integer, intent(in) :: gleg ! global leg number 
     integer :: ir               ! linearly stored index of a lattice site 
 
@@ -76,7 +72,7 @@ end function
 ! even for two-leg and four-leg vertices. 
 pure function leg_direction(opstring, gleg) result(dir)
     implicit none 
-    type(tBondOperator), intent(in) :: opstring(:)
+    type(t_BondOperator), intent(in) :: opstring(:)
     ! gleg is the global leg number
     integer, intent(in) :: gleg       
     
@@ -120,15 +116,10 @@ end function leg_direction
         
 pure function operator_type(op) result(t)
     implicit none 
-    type(tBondOperator), intent(in) :: op
+    type(t_BondOperator), intent(in) :: op
     integer :: t
                     
-    if( op%i < 0 ) then 
-#ifdef DEBUG_CLUSTER_UPDATE
-        if( (op%j > 0).OR.(op%k > 0) ) then
-            STOP "operator_type(): ERROR: strange operator detected"
-        endif 
-#endif         
+    if( op%i < 0 ) then         
         t = TRIANGULAR_PLAQUETTE
     elseif( op%i > 0) then 
         if( op%j > op%i ) then 
@@ -137,8 +128,6 @@ pure function operator_type(op) result(t)
             t = CONSTANT 
         elseif( op%j == 0) then
             t = SPIN_FLIP
-        else
-            STOP "operator_type(): ERROR: strange operator detected"
         endif 
     elseif( op%i == 0) then 
         t = IDENTITY
@@ -146,9 +135,8 @@ pure function operator_type(op) result(t)
             
 end function operator_type 
         
-
 subroutine quantum_cluster_update_plaquette( &
-    spins, opstring, vertexlink, config )
+    spins, opstring, vertexlink, leg_visited, config )
 ! ***************************************************
 ! Swendsen-Wang variant of the quantum cluster update
 ! ***************************************************
@@ -156,12 +144,14 @@ use class_Stack
 implicit none
 
 integer, intent(inout) :: spins(:)
-type(tBondOperator), intent(inout) :: opstring(:)
+type(t_BondOperator), intent(inout) :: opstring(:)
 integer, intent(in) :: vertexlink(:)
-type(tConfig), intent(in) :: config  
+! Note: leg_visited(:) must have been initialized during the construction 
+! of the linked list so as to mark 'ghostlegs' as visited. 
+logical, intent(inout) :: leg_visited(:) 
+type(t_Config), intent(in) :: config  
     
 type(t_Stack) :: stack
-logical :: leg_visited( config%n_legs ) 
 integer :: smallest_unvisited_leg
 logical :: LEGS_TO_BE_PROCESSED
 ! Has the spin at site ir been touched by a cluster ? 
@@ -179,17 +169,20 @@ integer :: leg_start, leg, leg_next
 integer :: dir 
 integer :: ip, ir, l  
 
+#ifdef DEBUG_CLUSTER_UPDATE
+    print*, "initial spin config=", spins(:)
+#endif 
+
 call stack%init( config%n_legs )  
-leg_visited(:) = .FALSE.
 touched(:) = .FALSE.
 WINDING_MACROSPIN(:) = .FALSE.
-smallest_unvisited_leg = 1
+smallest_unvisited_leg = 1 ! first cluster is always built from leg 1
 LEGS_TO_BE_PROCESSED = .TRUE.
 
 do while( LEGS_TO_BE_PROCESSED )
 
     ! Swendsen-Wang: flip cluster or not 
-    prob = ran()
+    call random_number(prob)
     if (prob < ONE_HALF) then 
         FLIPPING = .TRUE.
     else
@@ -197,9 +190,14 @@ do while( LEGS_TO_BE_PROCESSED )
     endif 
     
     leg_start = smallest_unvisited_leg    
-    call stack%push( leg_start )    
+    call stack%push( leg_start )
     leg_visited( leg_start ) = .TRUE.        
-    call process_leg( leg_start )
+#ifdef DEBUG_CLUSTER_UPDATE
+    print*, "============================="    
+    print*, "process start_leg", leg_start
+#endif     
+    call process_leg( leg_start, FLIPPING, opstring, &
+                      stack, leg_visited, touched )
     
     do while( .not.stack%is_empty() )
         leg = stack%pop()   
@@ -214,22 +212,25 @@ do while( LEGS_TO_BE_PROCESSED )
         endif 
         
         if( .not.leg_visited(leg_next) ) then 
-            
-            leg_visited(leg_next) = .TRUE.
-            
-            call process_leg( leg_next )
-            
+#ifdef DEBUG_CLUSTER_UPDATE            
+            print*, "process next_leg", leg_next
+#endif             
+            leg_visited(leg_next) = .TRUE.                        
+            call process_leg( leg_next, FLIPPING, opstring, &
+            stack, leg_visited, touched )            
             
         endif 
         
     enddo
 
     ! Which legs have not been processed yet ?
-    do l = smallest_unvisited_leg, config%n_legs + 1
-        if( l == config%n_legs + 1) then 
+    do l = smallest_unvisited_leg, config%n_ghostlegs + 1
+        if( l == config%n_ghostlegs + 1) then 
             LEGS_TO_BE_PROCESSED = .FALSE.
             exit
         endif 
+        ! Note: ghostlegs should have been marked as visited 
+        !       during construction of the linked list.
         if( .NOT.leg_visited(l) ) then
            smallest_unvisited_leg = l
            exit
@@ -248,12 +249,17 @@ enddo
 ! Flip all spins that are not part of a cluster with probability 1/2.
 do ir = 1, config%n_sites
   if (.not.touched(ir)) then
-    prob = ran()
+    call random_number(prob)
     if( prob.le. ONE_HALF ) then
       spins(ir) = -spins(ir)
     endif    
   endif
 enddo
+
+#ifdef DEBUG_CLUSTER_UPDATE
+    print*, "final spin config=", spins(:)
+#endif 
+
 
 end subroutine
 
@@ -266,12 +272,12 @@ subroutine process_leg( &
 use class_Stack
 implicit none
 
-integer, intent(in)                :: gleg 
-logical, intent(in)                :: FLIPPING ! whether the Swendsen-Wang cluster is to be flipped or not 
-type(tBondOperator), intent(inout) :: opstring(:)
-type(t_Stack), intent(out)         :: stack
-logical, intent(out)               :: leg_visited(:)
-logical, intent(out)               :: touched(:)
+integer, intent(in)                 :: gleg 
+logical, intent(in)                 :: FLIPPING ! whether the Swendsen-Wang cluster is to be flipped or not 
+type(t_BondOperator), intent(inout) :: opstring(:)
+type(t_Stack), intent(inout)        :: stack
+logical, intent(out)                :: leg_visited(:)
+logical, intent(out)                :: touched(:)
 
 ! local variables 
 integer :: ip, i1, i2
@@ -293,7 +299,7 @@ dir = leg_direction(opstring, gleg)
 
 if( i1.lt.0 ) then
     ! Triangular plaquette operator encountered.
-    ! For plaquettes the cluster construction rules 
+    ! For triangular plaquettes the cluster construction rules 
     ! are those described in Ref. [1] 
 
     vleg_mod = mod(vleg-1, MAX_GHOSTLEGS/2) + 1
@@ -307,7 +313,7 @@ if( i1.lt.0 ) then
             ! entrance leg is privileged leg
             ! put only the other privileged leg onto the stack 
             ! (Which vleg number this is depends 
-            ! on whether in entrance leg points down or up.)
+            ! on whether the entrance leg points down or up.)
             leg1 = gleg - dir*3
             call stack%push(leg1)
             leg_visited(leg1) = .TRUE.
@@ -337,7 +343,7 @@ if( i1.lt.0 ) then
                     leg3 = gleg + 1		
                 ELSEIF( vleg_mod == C_LEG ) THEN
                     ! put legs 
-                    !      gleg - 1, gleg - 3, gleg - 4   onto stack 
+                    !      gleg - 1, gleg - 3, gleg - 4   onto stack
                     leg1 = gleg - 1		  
                     leg2 = gleg - 3
                     leg3 = gleg - 4      
@@ -405,6 +411,10 @@ if( i1.lt.0 ) then
         leg_visited(leg4) = .TRUE.
         leg_visited(leg5) = .TRUE.   
 
+#ifdef DEBUG_CLUSTER_UPDATE
+        print*, "putting on the stack legs ", leg1, leg2, leg3, leg4, leg5
+#endif
+
     endif ! A-site on majority spin configuration ?
 
 elseif( (i1.gt.0).and.(i2.gt.0).and.(i1.ne.i2) ) then
@@ -448,7 +458,7 @@ elseif( (i1.ne.0).and.(i2.eq.0) ) then
     touched(i1) = .TRUE.
 
 #ifdef DEBUG_CLUSTER_UPDATE
-    print*, "starting on a 2-leg vertex"
+    print*, "hitting on a 2-leg vertex -> STOP"
 #endif
     if (FLIPPING) then
         opstring(ip)%i = i1
@@ -462,7 +472,7 @@ elseif( (i1.ne.0).and.(i2.eq.i1) ) then
     touched(i1) = .TRUE.
 
 #ifdef DEBUG_CLUSTER_UPDATE
-    print*, "starting on a 2-leg vertex"
+    print*, "hitting on a 2-leg vertex -> STOP"
 #endif
     if (FLIPPING) then
         opstring(ip)%i = i1

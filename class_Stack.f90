@@ -7,7 +7,7 @@ module class_Stack
     type, public :: t_Stack
         integer, private, allocatable :: vals(:)
         integer, private :: stack_position 
-      contains
+      contains      
         procedure :: init => stack_init
         procedure :: pop => stack_pop
         procedure :: push => stack_push

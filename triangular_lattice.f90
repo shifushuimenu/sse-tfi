@@ -23,22 +23,27 @@
 
 MODULE lattice
     IMPLICIT NONE
+    PRIVATE
         
     ! triangular plaquette type for plaquette-based cluster update
-    TYPE :: tPlaquette
+    TYPE :: t_Plaquette
       INTEGER :: Asite
       INTEGER :: Bsite
       INTEGER :: Csite
     END TYPE
-                                                     
+
     PUBLIC init_lattice_triangular
     PUBLIC unit_test
-    
+
+    INTEGER, PARAMETER, PUBLIC :: A_UPDATE=111 
+    INTEGER, PARAMETER, PUBLIC :: B_UPDATE=112
+    INTEGER, PARAMETER, PUBLIC :: C_UPDATE=113
+
     CONTAINS
 
 ! Comparison of arrays of plaquette structures     
 FUNCTION compare(p1, p2) RESULT(b)        
-     TYPE(tPlaquette), pointer, INTENT(IN) :: p1(:), p2(:)
+     TYPE(t_Plaquette), pointer, INTENT(IN) :: p1(:), p2(:)
      LOGICAL, allocatable :: b(:)
      integer :: i, n
      n = size(p1,1)
@@ -99,7 +104,7 @@ SUBROUTINE init_lattice_triangular( &
   INTEGER, INTENT(IN)  :: nx, ny
   INTEGER, POINTER, INTENT(OUT) :: neigh(:,:)
   INTEGER, POINTER, INTENT(OUT) :: sublattice(:)
-  TYPE (tPlaquette), POINTER, INTENT(OUT) :: plaquettes(:)    
+  TYPE (t_Plaquette), POINTER, INTENT(OUT) :: plaquettes(:)    
   
   ! missing: information about momentum grid of the Bravais lattice 
 
@@ -390,27 +395,27 @@ DO xg = 1, nx
     
     if( mod(yg,3).eq.1 ) then                                         
       if( mod(ir_row,3).eq.1 ) then                                   
-	sub = 1
-      elseif( mod(ir_row,3).eq.2 ) then                                                     
-	sub = 2
+        sub = 1
+      elseif( mod(ir_row,3).eq.2 ) then
+        sub = 2
       else
-	sub = 3
+        sub = 3
       endif
     elseif( mod(yg,3).eq.2 ) then
       if( mod(ir_row,3).eq.1 ) then
-	sub = 3
+        sub = 3
       elseif( mod(ir_row,3).eq.2 ) then
-	sub = 1
+        sub = 1
       else
-	sub= 2
+        sub= 2
       endif
     elseif( mod(yg,3).eq.0 ) then
       if( mod(ir_row,3).eq.1 ) then
-	sub = 2
+        sub = 2
       elseif( mod(ir_row,3).eq.2 ) then
-	sub = 3
+        sub = 3
       else
-	sub = 1
+        sub = 1
       endif      
     endif
     
@@ -436,7 +441,7 @@ SUBROUTINE unit_test(testfile)
     INTEGER :: nx, ny
     INTEGER, pointer :: neigh(:,:), neigh_exp(:,:)
     INTEGER, pointer :: sublattice(:), sublattice_exp(:)
-    TYPE (tPlaquette), pointer :: plaquettes(:), plaquettes_exp(:)      
+    TYPE (t_Plaquette), pointer :: plaquettes(:), plaquettes_exp(:)      
     ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     
     NAMELIST /PARAMS/ nx, ny

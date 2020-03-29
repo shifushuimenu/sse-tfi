@@ -1,3 +1,18 @@
+! TODO:
+! - relabel legs around two-leg and four-leg vertices so 
+!   that the direction into which a leg is pointing can be 
+!   determined easily from the vertex leg number.
+! - Ultimately, replace the array leg_visited( 1:MAX_GHOSTLEGS*n_exp )
+!   by a different data structure which requires less memory. 
+! - check self-consistency of the linked list 
+
+! - Implement the linked list via pointers and derived data types 
+!   so that the number of nodes is equal to the number of physical legs.
+!   If the linked list is implemented via an array, then the number of 
+!   entries of the array must be equal to the number of 'ghostlegs' because
+!   the leg number is used as an index into the array, with the array value 
+!   giving the connceting leg. 
+
 MODULE linked_list
 
     USE SSE_configuration 
@@ -5,7 +20,8 @@ MODULE linked_list
 
     CONTAINS
 
-SUBROUTINE build_linkedlist_plaquette( vertexlink, opstring, config )
+subroutine build_linkedlist_plaquette( &
+  opstring, config, vertexlink, leg_visited )
 !---------------------------------------------------------------!
 ! convention for numbering of vertex legs:                      !
 !                                                               !
@@ -26,24 +42,25 @@ SUBROUTINE build_linkedlist_plaquette( vertexlink, opstring, config )
 ! Note: "ghostlegs" in square brackets are not connected to     !
 !       any other legs.                                         !
 !---------------------------------------------------------------!
-IMPLICIT NONE 
+implicit none 
 
-INTEGER, POINTER, INTENT(OUT) :: vertexlink(:)
-TYPE(tBondOperator), POINTER, INTENT(IN) :: opstring(:)
-TYPE(tConfig), INTENT(IN) :: config  
-
-! GENERALIZE: This depends on the type of frustrated plaquettes.
-INTEGER, PARAMETER :: MAX_GHOSTLEGS = 6
+! automatic array 
+type(t_BondOperator), intent(in) :: opstring(:)
+type(t_Config), intent(in) :: config  
+! automatic arrays
+!   allocate(vertexlink( config%n_ghostlegs ))
+!   allocate(leg_visited( config%n_ghostlegs) )
+integer, intent(out) :: vertexlink(:)
+logical, intent(out) :: leg_visited(:)
 
 ! automatic arrays used for building the linked list 
-INTEGER :: firstleg( config%n_sites )
-INTEGER :: lastleg( config%n_sites ) 
+integer :: firstleg( config%n_sites )
+integer :: lastleg( config%n_sites ) 
 
 integer :: i, ip, i1, i2, leg_counter
 integer :: ir_A, ir_B, ir_C
 
-if(allocated(vertexlink)) deallocate(vertexlink)
-allocate(vertexlink( config%n_legs )) 
+leg_visited(:) = .FALSE.
 firstleg(:) = 0
 lastleg(:) = 0 
 
@@ -115,7 +132,7 @@ if ( (i1.gt.0).and.(i2.gt.0).and.(i1.ne.i2) ) then
     print*,'Error: i1 > i2 => exiting'
     stop
   endif
-#ENDIF   
+#endif    
 
   ! update linked list 
   ! lower two legs
@@ -139,6 +156,11 @@ if ( (i1.gt.0).and.(i2.gt.0).and.(i1.ne.i2) ) then
   ! around a 4-leg vertex
   lastleg(i2) = leg_counter + 4
   lastleg(i1) = leg_counter + 3  
+  ! mark the 'ghostlegs' as 'visited' so that they are 
+  ! noT used as starting legs for constructing a cluster
+  ! during the off-diagonal update 
+  leg_visited(leg_counter + 5) = .TRUE.
+  leg_visited(leg_counter + 6) = .TRUE.
   ! increment leg counter using 'ghostlegs' so that 
   ! ever vertex is associated with MAX_GHOSTLEGS legs.  
   leg_counter = leg_counter + MAX_GHOSTLEGS
@@ -158,6 +180,11 @@ IF( (i1 /= 0).and.((i2 == 0).or.(i2 == i1)) ) THEN
   ENDIF  
   ! upper leg
   lastleg(i1) = leg_counter + 2  
+  ! mark 'ghostlegs' as 'visited'
+  leg_visited(leg_counter + 3) = .TRUE.
+  leg_visited(leg_counter + 4) = .TRUE.
+  leg_visited(leg_counter + 5) = .TRUE.
+  leg_visited(leg_counter + 6) = .TRUE.
   leg_counter = leg_counter + MAX_GHOSTLEGS
 ENDIF
 
@@ -168,7 +195,7 @@ if ((i1.eq.0).and.(i2.ne.0)) then
   stop
 endif
 !------------------------------------
-#endif DEBUG 
+#endif
 
 enddo
 
@@ -176,7 +203,7 @@ enddo
 ! Implement periodic boundary conditions 
 ! in imaginary time for the linked lis. 
 ! ***************************************
-do i=1,n_sites
+do i=1, config%n_sites
  if (lastleg(i).ne.0) then
     vertexlink(lastleg(i)) = firstleg(i)
     vertexlink(firstleg(i)) = lastleg(i)
@@ -187,54 +214,6 @@ END SUBROUTINE build_linkedlist_plaquette
 
 
 SUBROUTINE unit_test
-! ! ! #ifdef DEBUG
-
-! ! ! integer :: l, leg, ir, i3
-! ! ! integer, allocatable :: spins_tmp(:)
-
-! ! !     allocate(spins_tmp(n_sites))
-! ! ! 
-! ! !     do ir=1,n_sites
-! ! !       spins_tmp(ir) = spins(ir)
-! ! !     enddo
-! ! !     
-! ! !     print*, "OPERATOR LIST      ip          i1            i2"
-! ! !     do ip=LL,1, -1
-! ! ! 	i1 = opstring(ip)%i
-! ! ! 	i2 = opstring(ip)%j
-! ! !       if ( (i1.eq.0).and. (i2.eq.0) ) then
-! ! ! 	print*, "identity", ip, i1, i2
-! ! !       elseif ( (i1.gt.0).and.(i2.eq.0) ) then
-! ! ! 	print*, "spinflip", ip, i1, i2
-! ! ! 	spins_tmp(i1) = - spins_tmp(i1)
-! ! !       elseif ( (i1.gt.0).and.(i1.eq.i2) ) then
-! ! ! 	print*, "constant", ip, i1, i2
-! ! !       elseif ( (i1.gt.0).and.(i2.gt.0).and.(i1.ne.i2) ) then
-! ! ! 	print*, "Ising   ", ip, i1, i2
-! ! !       elseif ( (i1.lt.0).and.(i2.lt.0) ) then
-! ! !         i3 = opstring(ip)%k
-! ! !         print*, "Plaquette", ip, abs(i1), abs(i2), abs(i3)
-! ! !       else
-! ! ! 	print*, "strange operator detected, ip=", ip
-! ! !       endif
-! ! !       !print current spin configuration
-! ! !   !     print*, "spins", ip, (spins_tmp(ir), ir=1,n_sites)
-! ! !     enddo
-! ! ! 
-! ! !     deallocate(spins_tmp)
-! ! ! 
-! ! ! ! display linked list
-! ! !     print*, "LINKED LIST DONE - > display"
-! ! !     do leg =1,n_legs
-! ! !       print*, leg, " --> ", vertexlink(leg)
-! ! !     enddo
-! ! ! 
-! ! ! #endif 
-! ! ! 
-! ! ! ! TO DO: Traverse linked list and check for missing links
-! ! ! ! 	Make sure that the linked list is closed.
-! ! ! ! 	Check that the arrays ipir_to_leg(:) and  leg_to_ipir(:) are consistent.
-! ! ! ! REMOVE ALL THE CHECK ROUTINES ONCE THE PROGRAM IS USED FOR COMPUTATIONS
 
 END SUBROUTINE unit_test
 
