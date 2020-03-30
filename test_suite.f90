@@ -74,7 +74,9 @@ module test_suite
 
     subroutine test_diagonal_update 
         use diagonal_update 
-        call init_test_SSEconfig 
+        use lattice 
+
+        
 
     end subroutine 
 

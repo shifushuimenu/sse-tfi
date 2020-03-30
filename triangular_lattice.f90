@@ -41,7 +41,8 @@ MODULE lattice
 
     CONTAINS
 
-! Comparison of arrays of plaquette structures     
+! Comparison of arrays of plaquette structures   
+!!! not tested yet !!!  
 FUNCTION compare(p1, p2) RESULT(b)        
      TYPE(t_Plaquette), pointer, INTENT(IN) :: p1(:), p2(:)
      LOGICAL, allocatable :: b(:)

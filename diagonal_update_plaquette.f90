@@ -5,6 +5,9 @@
 module diagonal_update
   use types
   implicit none 
+  private 
+
+  public t_ProbTable, diagonal_update_plaquette, init_probtables
 
 type t_ProbTable 
   ! cumulative probability tables for 
@@ -15,6 +18,7 @@ type t_ProbTable
   real(dp), allocatable :: P_cumulsecond(:,:)
   real(dp) :: sum_all_diagmatrix_elements_2or4leg
   real(dp) :: sum_all_diagmatrix_elements
+  real(dp) :: consts_added 
 end type 
 
   contains 
@@ -343,5 +347,158 @@ PURE FUNCTION binary_search(cumul_prob_table, prob) RESULT(idx)
     ENDDO
 
 END FUNCTION binary_search
+
+
+subroutine init_probtables( J_interaction_matrix, hx, &
+    probtable, Jij_sign, J_1, n_plaquettes, TRANSLAT_INV )
+! *******************************************************************
+! Purpose:
+! --------
+!    Precompute cumulative probability tables needed for sampling 
+!    SSE operators during the diagonal update.
+
+! Input:
+! ------
+!    J_interaction_matrix: 2D array of shape (n_sites, n_sitess)
+!       The element [i,j] contains the 
+!       interaction between linearly stored sites i and j.
+!    hx: value of the transverse field 
+!    TRANSLAT_INV: logical
+!       Indicates whether the interactions are translationally 
+!       invariant. In this case the interaction matrix can be 
+!       replaced by a vector. 
+!       !!! Not implemented yet !!!
+!
+! Output:
+! -------
+!    probtable: structure of type(t_ProbTable)
+!       Precomputed cumulative probability tables
+!    Jij_sign: integer array
+!       Sign of the interaction bonds. 
+! 
+! *******************************************************************
+  use SSE_configuration 
+  implicit none 
+
+  real(dp), intent(in)           :: J_interaction_matrix(:,:)
+  real(dp), intent(in)           :: hx
+  type(t_ProbTable), intent(out) :: probtable 
+  integer, intent(out)           :: Jij_sign(:,:)
+  real(dp), intent(in)           :: J_1  ! nearest neighbour interactions, expect: J_1 = +1
+  integer,intent(in)             :: n_plaquettes 
+  logical, intent(in)            :: TRANSLAT_INV
+
+  ! automatic helper arrays
+  ! array of the matrix elements of the bond operators, i.e. h for i=j and 2|J_ij| else
+  real(dp) :: M_ij( size(J_interaction_matrix, 1), size(J_interaction_matrix, 1) )
+  ! relative probabilities for choosing the first index of an Ising operator
+  real(dp) :: P_first( size(J_interaction_matrix, 1) )	
+  integer :: n
+  real(dp) :: cc, ss
+
+  integer :: ir, jr, k
+  real(dp) :: norm
+
+  if( J_1 /= +1 ) then 
+    print*, "For the triangular plaquette update to be meaningful we need J_1 = +1 (i.e. AFM)."
+    print*, "Furthermore, J_1 sets the energy scale."
+    print*, "Exiting ..."
+    stop
+  endif 
+  
+  if( TRANSLAT_INV ) then 
+    print*, "Translational invariance of probability tables not implemented yet."
+    print*, "Exiting ..."
+    stop
+  endif 
+
+  where( J_interaction_matrix > 0 )
+    Jij_sign = +1
+  elsewhere( J_interaction_matrix < 0 )
+    Jij_sign = -1
+  elsewhere 
+    Jij_sign = 0
+  endwhere
+
+  ! number of lattice sites 
+  n = size(J_interaction_matrix, 1)
+  ! Hamiltonian matrix elements on the computational, i.e. the Sz - basis
+
+  ! Matrix elements have only two values, 2*abs(J_ij) and h:
+  M_ij(:,:) = 2*dabs(J_interaction_matrix(:,:))
+  do ir=1,n
+    M_ij(ir,ir) = hx
+  enddo
+
+! 1. The constants which have been added to the Hamiltonian artificially have to be
+! subtracted from the energy in the end.
+! 2. Sum over all matrix elements used in the transition probabilities 
+! when deciding whether to insert or remove an operator
+
+cc = n*hx
+ss = n*hx
+do ir=1, n
+  do jr=1, ir-1 ! avoid double counting and count only ir.ne.jr
+    cc = cc + abs(J_interaction_matrix(ir,jr)) 
+    ss = ss + 2*abs(J_interaction_matrix(ir,jr))
+  enddo
+enddo
+! see Ref. [1]
+cc = cc + (3.0_dp/2.0_dp) * abs(J_1) * n_plaquettes 
+
+probtable%consts_added = cc
+probtable%sum_all_diagmatrix_elements_2or4leg = ss 
+! include matrix elements from tirangular plaquettes 
+probtable%sum_all_diagmatrix_elements = ss + 2*abs(J_1) * n_plaquettes 
+
+
+! Calculate the cumulative probability tables used in the diagonal update
+allocate(probtable%P_cumulfirst(n))
+allocate(probtable%P_cumulsecond(n,n))
+
+do ir = 1, n
+  P_first(ir) = 0.0_dp; probtable%P_cumulfirst(ir) = 0.0_dp
+  do k = 1, n
+    probtable%P_cumulsecond(ir,k) = 0.0_dp
+  enddo
+enddo
+
+! probabilities for selecting the first index of an Ising/constant operator
+! relative probability for selecting index i:
+do ir = 1, n
+  P_first(ir) = sum(abs(M_ij(ir,:)))
+enddo
+
+! cumulative probabilities used in the heat bath algorithm
+norm = sum(P_first(:))
+do k = 1, n 
+  do ir = 1, k
+    probtable%P_cumulfirst(k) = probtable%P_cumulfirst(k) + P_first(ir)
+  enddo
+  probtable%P_cumulfirst(k) = probtable%P_cumulfirst(k)/norm 
+enddo
+
+! The relative probability for choosing j as the second index given i as the first index
+! is M_ij (conditional probability). 
+do ir = 1, n  
+  do k = 1, n
+    do jr = 1, k
+      probtable%P_cumulsecond(ir,k) = probtable%P_cumulsecond(ir,k) + abs(M_ij(ir,jr))
+    enddo
+  enddo
+enddo
+
+!normalize
+do ir = 1, n
+  norm = 0.0_dp
+  do jr = 1, n
+    norm = norm + abs(M_ij(ir,jr))
+  enddo
+  do k = 1, n
+    probtable%P_cumulsecond(ir,k) = probtable%P_cumulsecond(ir,k) / norm
+  enddo
+enddo
+
+end subroutine 
 
 end module 
