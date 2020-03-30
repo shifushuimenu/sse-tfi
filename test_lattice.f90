@@ -2,9 +2,9 @@ PROGRAM driver
     USE lattice
     IMPLICIT NONE 
     
-    INTEGER, POINTER :: neigh(:,:)
-    INTEGER, POINTER :: sublattice(:)
-    TYPE (t_Plaquette), POINTER :: plaquettes(:)
+    INTEGER, ALLOCATABLE :: neigh(:,:)
+    INTEGER, ALLOCATABLE :: sublattice(:)
+    TYPE (t_Plaquette), ALLOCATABLE :: plaquettes(:)
         
     integer :: nx=3, ny=3
     
@@ -18,6 +18,6 @@ PROGRAM driver
         plaquettes=plaquettes )
 
     print*, "testing..."
-    CALL unit_test('ut.test')
+    CALL unit_test('../unit_tests/triangular_lattice.test')
             
 END PROGRAM 

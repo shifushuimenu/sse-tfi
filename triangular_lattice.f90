@@ -32,6 +32,7 @@ MODULE lattice
       INTEGER :: Csite
     END TYPE
 
+    PUBLIC t_Plaquette
     PUBLIC init_lattice_triangular
     PUBLIC unit_test
 
@@ -44,7 +45,7 @@ MODULE lattice
 ! Comparison of arrays of plaquette structures   
 !!! not tested yet !!!  
 FUNCTION compare(p1, p2) RESULT(b)        
-     TYPE(t_Plaquette), pointer, INTENT(IN) :: p1(:), p2(:)
+     TYPE(t_Plaquette), INTENT(IN) :: p1(:), p2(:)
      LOGICAL, allocatable :: b(:)
      integer :: i, n
      n = size(p1,1)
@@ -103,15 +104,15 @@ SUBROUTINE init_lattice_triangular( &
   INTEGER :: coord = 6
   
   INTEGER, INTENT(IN)  :: nx, ny
-  INTEGER, POINTER, INTENT(OUT) :: neigh(:,:)
-  INTEGER, POINTER, INTENT(OUT) :: sublattice(:)
-  TYPE (t_Plaquette), POINTER, INTENT(OUT) :: plaquettes(:)    
+  INTEGER, ALLOCATABLE, INTENT(OUT) :: neigh(:,:)
+  INTEGER, ALLOCATABLE, INTENT(OUT) :: sublattice(:)
+  TYPE (t_Plaquette), ALLOCATABLE, INTENT(OUT) :: plaquettes(:)    
   
   ! missing: information about momentum grid of the Bravais lattice 
 
   INTEGER :: n
-  integer :: ir, jr
-                               
+  integer :: ir
+
   ! Variable for plaquette-based cluster update
   integer :: irA, irB, irC
   integer :: plaq_idx
@@ -125,7 +126,7 @@ SUBROUTINE init_lattice_triangular( &
    ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~             
    ! ASSIGN NEAREST NEIGHBOUR BONDS TO PLAQUETTE OPERATORS 
    ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-   IF( .NOT.(ASSOCIATED(plaquettes)) ) ALLOCATE(plaquettes( n )) 
+   IF( .NOT.(ALLOCATED(plaquettes)) ) ALLOCATE(plaquettes( n )) 
    IF (SIZE(plaquettes) /= n) THEN 
        PRINT*, "init_lattice_triangular(): ERROR, inconsistent input"
        PRINT*, "Exiting ..." 
@@ -239,7 +240,7 @@ SUBROUTINE neighbours_triangular( nx, ny, neigh )
   IMPLICIT NONE 
 
   INTEGER, INTENT(IN) :: nx, ny
-  INTEGER, POINTER, INTENT(OUT) :: neigh(:,:)
+  INTEGER, ALLOCATABLE, INTENT(OUT) :: neigh(:,:)
   
   INTEGER :: n
   ! coordination number
@@ -259,7 +260,7 @@ SUBROUTINE neighbours_triangular( nx, ny, neigh )
   
   n = nx*ny
   
-  IF( .NOT.(ASSOCIATED(neigh)) ) ALLOCATE(neigh(0:coord, n))
+  IF( .NOT.(ALLOCATED(neigh)) ) ALLOCATE(neigh(0:coord, n))
   ! In case the array has been allocated incorrectly before ...
   IF( SIZE(neigh,1) /= (coord+1) .OR. SIZE(neigh,2) /= n ) THEN
       PRINT*, "neighbours_triangular(): ERROR, inconsistent input"
@@ -378,11 +379,11 @@ SUBROUTINE sublattice_triangular( nx, ny, sublattice )
     
     IMPLICIT NONE
     INTEGER, INTENT(IN) :: nx, ny
-    INTEGER, POINTER, INTENT(OUT) :: sublattice(:)
+    INTEGER, ALLOCATABLE, INTENT(OUT) :: sublattice(:)
     
     INTEGER :: xg, yg, ir, ir_row, sub
 
-    IF( .NOT.(ASSOCIATED(sublattice)) )  ALLOCATE(sublattice( nx*ny ))
+    IF( .NOT.(ALLOCATED(sublattice)) )  ALLOCATE(sublattice( nx*ny ))
     IF (nx*ny /= size(sublattice, 1)) THEN  
         PRINT*, "sublattice_triangular(): ERROR, inconsistent input"
         STOP
@@ -440,9 +441,9 @@ SUBROUTINE unit_test(testfile)
     ! and create variables for 'expected' results, which
     ! are read from a testfile. 
     INTEGER :: nx, ny
-    INTEGER, pointer :: neigh(:,:), neigh_exp(:,:)
-    INTEGER, pointer :: sublattice(:), sublattice_exp(:)
-    TYPE (t_Plaquette), pointer :: plaquettes(:), plaquettes_exp(:)      
+    INTEGER, ALLOCATABLE :: neigh(:,:), neigh_exp(:,:)
+    INTEGER, ALLOCATABLE :: sublattice(:), sublattice_exp(:)
+    TYPE (t_Plaquette), ALLOCATABLE :: plaquettes(:), plaquettes_exp(:)      
     ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     
     NAMELIST /PARAMS/ nx, ny
