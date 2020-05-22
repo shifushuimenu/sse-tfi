@@ -10,10 +10,10 @@ include ./make.sys.gfortran
 modules = mod_types.o mod_util.o mod_MPI_parallel.o
 ssetfi_objects =  class_Stack.o \
 		  SSE_configuration.o \
-	          triangular_lattice.o \
-	          linked_list_triangular_plaquette.o \
-	          diagonal_update_plaquette.o \
-	          ssetfi_globals.o \
+	      triangular_lattice.o \
+	      linked_list_triangular_plaquette.o \
+	      diagonal_update_plaquette.o \
+	      ssetfi_globals.o \
 		  quantum_cluster_update_plaquette.o \
 		  measurements.o
 	  
@@ -26,7 +26,7 @@ all: ssetfi
 
 
 ssetfi: ${objects} ssetfi_main.f90 make.sys.gfortran
-	${F90} ${objects} -o ssetfi ssetfi_main.f90 ${LFLAGS}
+	${F90} $ ${LFLAGS} ${objects} -o ssetfi ssetfi_main.f90
 
 .f90.o:
 	${F90} ${FFLAGS} -c $*.f90

@@ -90,7 +90,7 @@ subroutine init_SSEconfig_hostart( n_sites, LL, config, &
 
     allocate(opstring(LL))
     do ip=1, LL
-        opstring(ip)%i = 0; opstring(ip)%j = 0
+        opstring(ip)%i = 0; opstring(ip)%j = 0; opstring(ip)%k = 0
     enddo 
     allocate( spins(n_sites) )
     

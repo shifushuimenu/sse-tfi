@@ -11,7 +11,7 @@
 !   If the linked list is implemented via an array, then the number of 
 !   entries of the array must be equal to the number of 'ghostlegs' because
 !   the leg number is used as an index into the array, with the array value 
-!   giving the connceting leg. 
+!   giving the connecting leg. 
 
 MODULE linked_list
 
@@ -63,6 +63,9 @@ integer :: ir_A, ir_B, ir_C
 leg_visited(:) = .FALSE.
 firstleg(:) = 0
 lastleg(:) = 0 
+
+! initialize linked list with invalid leg numbers 
+vertexlink(:) = -1
 
 ! The first leg has index 1.
 leg_counter = 0
@@ -209,6 +212,27 @@ do i=1, config%n_sites
     vertexlink(firstleg(i)) = lastleg(i)
   endif
 enddo
+
+! TO DO: Traverse linked list and check for missing links
+#if defined(DEBUG_CLUSTER_UPDATE)
+  leg_counter = 0
+  do i=1, config%n_ghostlegs
+    if (vertexlink(i) /= -1) then 
+      leg_counter = leg_counter + 1 
+      if (i /=  vertexlink(vertexlink(i))) then 
+        print*, "ERROR: linked list is inconsistent"
+        print*, "leg=",i, "vertexlink(vertexlink(i))=",vertexlink(vertexlink(i))
+        stop
+      endif 
+    endif 
+  enddo 
+  if (leg_counter /= config%n_legs) then 
+    print*, "ERROR: linked list has missing links"
+    print*, "leg_counter /= config%n_legs"
+    stop
+  endif 
+#endif 
+
 
 END SUBROUTINE build_linkedlist_plaquette
 
