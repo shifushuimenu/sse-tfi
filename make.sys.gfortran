@@ -1,4 +1,5 @@
 F90 = mpif90.openmpi
 MPI = -DUSE_MPI
-FFLAGS = -c -cpp -g -p -fbounds-check -Wall ${MPI}
-LFLAGS =
+DEBUG = #-DDEBUG_CLUSTER_UPDATE -DDEBUG_DIAGONAL_UPDATE
+FFLAGS = -cpp -g -p -fbounds-check ${MPI} ${DEBUG}
+LFLAGS = ${FFLAGS}

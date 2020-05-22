@@ -36,6 +36,7 @@ SUBROUTINE diagonal_update_plaquette( beta, Jij_sign, &
 
 use SSE_configuration
 use lattice
+use ssetfi_globals, only: A_UPDATE, B_UPDATE, C_UPDATE
 
 ! use probtables 
 implicit none
