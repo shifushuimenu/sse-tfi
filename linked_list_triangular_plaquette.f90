@@ -87,6 +87,15 @@ do ip=1, config%LL
   i2 = opstring(ip)%j
 
 ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+! Identity operator encountered
+! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+if((i1 == 0) .and. (i2 == 0)) then 
+  ! necessary for the mapping leg_number -> ip
+  leg_visited(leg_counter+1:leg_counter+MAX_GHOSTLEGS) = .TRUE.
+  leg_counter = leg_counter + MAX_GHOSTLEGS
+endif 
+
+! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ! Six-leg vertex, i.e.
 ! triangular plaquette operator encountered
 ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

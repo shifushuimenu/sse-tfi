@@ -44,11 +44,11 @@ pure function gleg_to_ir(op, gleg) result(ir)
     select case( operator_type(op) )
         case(TRIANGULAR_PLAQUETTE)
             if( vleg_mod == A_LEG ) then
-                ir = op%i
+                ir = -op%i
             elseif( vleg_mod == B_LEG ) then 
-                ir = op%j
+                ir = -op%j
             elseif( vleg_mod == C_LEG ) then 
-                ir = op%k
+                ir = -op%k
             endif 
         case(ISING_BOND)
             if( vleg_mod == 1 ) then 
@@ -178,8 +178,8 @@ integer :: ip, ir, l
 call stack%init( config%n_legs )  
 touched(:) = .FALSE.
 WINDING_MACROSPIN(:) = .FALSE.
-! first cluster is always built from leg 1
-! (because leg 1 can never be a ghostleg by construction)
+! first cluster is always built from the smallest unvisited leg
+! (which need not be leg 1 if identities also carry ghostlegs)
 smallest_unvisited_leg = 1 
 LEGS_TO_BE_PROCESSED = .TRUE.
 
@@ -192,6 +192,10 @@ do while( LEGS_TO_BE_PROCESSED )
     else
         FLIPPING = .FALSE.
     endif 
+
+    do while(leg_visited(smallest_unvisited_leg))
+        smallest_unvisited_leg = smallest_unvisited_leg + 1
+    enddo 
 
     leg_start = smallest_unvisited_leg    
     call stack%push( leg_start )

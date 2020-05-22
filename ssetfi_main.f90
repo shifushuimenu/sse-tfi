@@ -80,7 +80,7 @@ subroutine init_SSEconfig_hostart( n_sites, LL, config, &
     config%n2leg = 0
     config%n4leg = 0 
     config%n6leg = 0
-    config%n_ghostlegs = MAX_GHOSTLEGS*config%n_exp
+    config%n_ghostlegs = MAX_GHOSTLEGS*config%LL
     config%n_legs = 2*config%n2leg+4*config%n4leg+6*config%n6leg
 
     ! IMPROVE: For triangular lattice with PBC only:

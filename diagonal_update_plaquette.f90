@@ -305,7 +305,7 @@ enddo !do ip=1,LL
 ! Update important variables that have not been explicitly 
 ! updated
     config%n_legs = 2*config%n2leg+4*config%n4leg+6*config%n6leg
-    config%n_ghostlegs = MAX_GHOSTLEGS * config%n_exp
+    config%n_ghostlegs = MAX_GHOSTLEGS*config%LL
 
 deallocate(spins2)
 
@@ -613,7 +613,7 @@ subroutine extend_cutoff(opstring, config)
   ! Update the only entries of the structure 'config'
   ! which have changed.
   config%LL = LL_new
-  config%n_ghostlegs = MAX_GHOSTLEGS*config%n_exp
+  config%n_ghostlegs = MAX_GHOSTLEGS*config%LL
   
   deallocate(p_taken); deallocate(opstring_new)
   
