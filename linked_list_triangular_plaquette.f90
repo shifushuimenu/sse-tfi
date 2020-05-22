@@ -47,8 +47,8 @@ implicit none
 ! automatic array 
 type(t_BondOperator), intent(in) :: opstring(:)
 type(t_Config), intent(in) :: config  
-integer, intent(out) :: vertexlink(:)
-logical, intent(out) :: leg_visited(:)
+integer, allocatable, intent(out) :: vertexlink(:)
+logical, allocatable, intent(out) :: leg_visited(:)
 
 ! automatic arrays used for building the linked list 
 integer :: firstleg( config%n_sites )
@@ -56,6 +56,15 @@ integer :: lastleg( config%n_sites )
 
 integer :: i, ip, i1, i2, leg_counter
 integer :: ir_A, ir_B, ir_C
+
+!REMOVE
+print*, "config%n_ghostlegs=",config%n_ghostlegs
+!REMOVE
+
+if( allocated(vertexlink) ) deallocate(vertexlink)
+allocate(vertexlink(config%n_ghostlegs))
+if( allocated(leg_visited) ) deallocate(leg_visited)
+allocate(leg_visited(config%n_ghostlegs))
 
 leg_visited(:) = .FALSE.
 firstleg(:) = 0
