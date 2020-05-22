@@ -139,6 +139,8 @@ subroutine quantum_cluster_update_plaquette( &
     spins, opstring, vertexlink, leg_visited, config )
 ! ***************************************************
 ! Swendsen-Wang variant of the quantum cluster update
+! Build all clusters, which is a deterministic process,
+! and flip each cluster with probaility 1/2. 
 ! ***************************************************
 use class_Stack
 implicit none
@@ -176,7 +178,9 @@ integer :: ip, ir, l
 call stack%init( config%n_legs )  
 touched(:) = .FALSE.
 WINDING_MACROSPIN(:) = .FALSE.
-smallest_unvisited_leg = 1 ! first cluster is always built from leg 1
+! first cluster is always built from leg 1
+! (because leg 1 can never be a ghostleg by construction)
+smallest_unvisited_leg = 1 
 LEGS_TO_BE_PROCESSED = .TRUE.
 
 do while( LEGS_TO_BE_PROCESSED )
@@ -188,7 +192,7 @@ do while( LEGS_TO_BE_PROCESSED )
     else
         FLIPPING = .FALSE.
     endif 
-    
+
     leg_start = smallest_unvisited_leg    
     call stack%push( leg_start )
     leg_visited( leg_start ) = .TRUE.        

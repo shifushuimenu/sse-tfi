@@ -612,7 +612,7 @@ subroutine extend_cutoff(opstring, config)
   ! Update the only entries of the structure 'config'
   ! which have changed.
   config%LL = LL_new
-  config%n_ghostlegs = MAX_GHOSTLEGS*config%LL
+  config%n_ghostlegs = MAX_GHOSTLEGS*config%n_exp
   
   deallocate(p_taken); deallocate(opstring_new)
   

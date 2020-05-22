@@ -47,9 +47,6 @@ implicit none
 ! automatic array 
 type(t_BondOperator), intent(in) :: opstring(:)
 type(t_Config), intent(in) :: config  
-! automatic arrays
-!   allocate(vertexlink( config%n_ghostlegs ))
-!   allocate(leg_visited( config%n_ghostlegs) )
 integer, intent(out) :: vertexlink(:)
 logical, intent(out) :: leg_visited(:)
 
@@ -160,7 +157,7 @@ if ( (i1.gt.0).and.(i2.gt.0).and.(i1.ne.i2) ) then
   lastleg(i2) = leg_counter + 4
   lastleg(i1) = leg_counter + 3  
   ! mark the 'ghostlegs' as 'visited' so that they are 
-  ! noT used as starting legs for constructing a cluster
+  ! not used as starting legs for constructing a cluster
   ! during the off-diagonal update 
   leg_visited(leg_counter + 5) = .TRUE.
   leg_visited(leg_counter + 6) = .TRUE.
