@@ -7,7 +7,10 @@ module diagonal_update
   implicit none 
   private 
 
-  public t_ProbTable, diagonal_update_plaquette, init_probtables
+  public t_ProbTable
+  public diagonal_update_plaquette
+  public init_probtables
+  public extend_cutoff
 
 type t_ProbTable 
   ! cumulative probability tables for 
@@ -37,7 +40,7 @@ use lattice
 ! use probtables 
 implicit none
 
-real(dp), intent(in) :: beta        ! inverse temperature 
+real(dp), intent(in) :: beta          ! inverse temperature 
 integer, intent(in) :: Jij_sign(:,:)  ! sign of the interaction bond (i,j): FM (<0) or AFM (>0)
                                       ! Note: If J_ij(i,j) == 0, then the corresponding bond will never be sampled
                                       !       from the cumulative probability table. 
@@ -46,7 +49,8 @@ type(t_BondOperator), intent(inout) :: opstring(:)
 type(t_Config), intent(inout) :: config
 type(t_ProbTable), intent(in) :: probtable
 type(t_Plaquette), intent(in) :: plaquettes(:)
-integer, intent(in) :: update_type   ! if update_type = 1 => "A-site update, =2 => "B-site update", =3 => "C-site update"
+! if update_type == A_UPDATE => "A-site update
+integer, intent(in) :: update_type   
 
 integer :: ip, i1, i2, index1, index2, k
 
@@ -128,6 +132,9 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
           opstring(ip)%j = index1
         endif
         ! 	Expansion order changes as n_exp -> n_exp + 1
+#ifdef DEBUG_DIAGONAL_UPDATE
+  print*, "insert an AFM Ising operator"
+#endif       
 	      config%n_exp = config%n_exp + 1; config%n4leg = config%n4leg + 1
         ! update P_add and  P_remove
         P_remove = float(( config%LL - config%n_exp + 1)) &
@@ -145,6 +152,9 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
           opstring(ip)%i = index2
           opstring(ip)%j = index1
         endif
+#ifdef DEBUG_DIAGONAL_UPDATE
+  print*, "insert an FM Ising operator"
+#endif             
         config%n_exp = config%n_exp + 1; config%n4leg = config%n4leg + 1
         ! update P_add and  P_remove
         P_remove = float(( config%LL - config%n_exp + 1)) &
@@ -158,7 +168,9 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
         OP_INSERTED = .TRUE.
         opstring(ip)%i = index1
         opstring(ip)%j = index2
-
+#ifdef DEBUG_DIAGONAL_UPDATE
+  print*, "insert a const. operator"
+#endif 
         config%n_exp = config%n_exp + 1; config%n2leg = config%n2leg + 1	
         ! update P_add and  P_remove
         P_remove = float(( config%LL - config%n_exp + 1)) &
@@ -227,6 +239,9 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
      else
        opstring(ip)%PRIVILEGED_LEG_IS_MAJORITY_LEG = .FALSE.
      endif     
+#ifdef DEBUG_DIAGONAL_UPDATE
+  print*, "insert a minimally frustrated plaquette operator"
+#endif          
      config%n_exp = config%n_exp + 1; config%n6leg = config%n6leg + 1 
      ! update P_add and  P_remove
      P_remove = float(( config%LL - config%n_exp + 1)) &
@@ -242,7 +257,7 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
   
 endif !identity encountered
 
-  ! Ising bond operator, Ising triangular plaquette, or constant encountered: 
+  ! Diagonal operator encountered: 
   ! Try replacement:  Ising plaquette / Ising bond / const => identity
   ! Expansion order changes as n_exp -> n_exp - 1
   if ((i1.ne.0).and.(i2.ne.0)) then
@@ -253,6 +268,9 @@ endif !identity encountered
     if (prob <= P_minus) then
       opstring(ip)%i = 0
       opstring(ip)%j = 0
+#ifdef DEBUG_DIAGONAL_UPDATE
+  print*, "remove a diagonal operator"
+#endif                 
       config%n_exp = config%n_exp - 1
       ! update P_add and  P_remove
       P_remove = float(( config%LL - config%n_exp + 1)) &
@@ -281,6 +299,11 @@ endif !identity encountered
   endif
 
 enddo !do ip=1,LL
+
+! update convenience variables that have not been explicitly 
+! updated
+config%n_ghostlegs = MAX_GHOSTLEGS*config%LL ! stays actually constand during diag. update
+config%n_legs = 2*config%n2leg+4*config%n4leg+6*config%n6leg
 
 deallocate(spins2)
 
@@ -384,7 +407,7 @@ subroutine init_probtables( J_interaction_matrix, hx, &
   real(dp), intent(in)           :: hx
   type(t_ProbTable), intent(out) :: probtable 
   integer, intent(out)           :: Jij_sign(:,:)
-  real(dp), intent(in)           :: J_1  ! nearest neighbour interactions, expect: J_1 = +1
+  real(dp), intent(in)           :: J_1  ! nearest neighbour interactions inside a plaquette, subroutine expects: J_1 = +1
   integer,intent(in)             :: n_plaquettes 
   logical, intent(in)            :: TRANSLAT_INV
 
@@ -402,10 +425,18 @@ subroutine init_probtables( J_interaction_matrix, hx, &
   if( J_1 /= +1 ) then 
     print*, "For the triangular plaquette update to be meaningful we need J_1 = +1 (i.e. AFM)."
     print*, "Furthermore, J_1 sets the energy scale."
-    print*, "Exiting ..."
-    stop
+    if (J_1 == 0) then 
+      print*, "It is assumed that you set J_1 = 0 in order to suppress the plaquette update" 
+      print*, "and only use the bond-based update. The interaction matrix for pairwise interacionts"
+      print*, "should be read from some file."
+      print*, "Continuing ..."
+    else
+      print*, "Exiting ..."
+      stop
+    endif 
   endif 
-  
+
+
   if( TRANSLAT_INV ) then 
     print*, "Translational invariance of probability tables not implemented yet."
     print*, "Exiting ..."
@@ -440,19 +471,21 @@ ss = n*hx
 do ir=1, n
   do jr=1, ir-1 ! avoid double counting and count only ir.ne.jr
     cc = cc + abs(J_interaction_matrix(ir,jr)) 
-    ss = ss + 2*abs(J_interaction_matrix(ir,jr))
+    ss = ss + TWO*abs(J_interaction_matrix(ir,jr))
   enddo
 enddo
+
 ! see Ref. [1]
-cc = cc + (3.0_dp/2.0_dp) * abs(J_1) * n_plaquettes 
+cc = cc + (3.0_dp/2.0_dp) * abs(J_1) * n_plaquettes
 
 probtable%consts_added = cc
 probtable%sum_all_diagmatrix_elements_2or4leg = ss 
-! include matrix elements from tirangular plaquettes 
-probtable%sum_all_diagmatrix_elements = ss + 2*abs(J_1) * n_plaquettes 
+! include matrix elements from triangular plaquettes 
+probtable%sum_all_diagmatrix_elements = ss + TWO*abs(J_1)*n_plaquettes 
 
 
 ! Calculate the cumulative probability tables used in the diagonal update
+! for the insertion of diagonal 2leg and 4leg vertices. 
 allocate(probtable%P_cumulfirst(n))
 allocate(probtable%P_cumulsecond(n,n))
 
@@ -500,5 +533,87 @@ do ir = 1, n
 enddo
 
 end subroutine 
+
+
+subroutine extend_cutoff(opstring, config)
+!****************************************************************
+! Extend the cut-off of the fixed length operator string to
+!   LL_new = n_exp + n_exp / 2. 
+!****************************************************************
+  use SSE_configuration 
+  use types 
+  implicit none 
+
+  type(t_BondOperator), allocatable, intent(inout) :: opstring(:)
+  type(t_Config), intent(inout) :: config 
+  
+  logical, allocatable :: p_taken(:)
+  type(t_BondOperator), allocatable :: opstring_new(:)
+  integer :: LL, LL_new, n_exp_new
+  integer :: i, ip, pos, n    
+  real(dp) :: eta
+
+  LL = config%LL
+  LL_new = config%n_exp + int(float(config%n_exp)/2.0_dp)
+  
+  allocate(p_taken(LL_new))
+  allocate(opstring_new(LL_new))
+  do ip = 1, LL_new
+      p_taken(ip) = .FALSE.
+  enddo
+  
+  ! Extract a random sequence of (LL_new - LL) positions
+  ! in the interval [0,LL_new] where
+  ! the identity operators will be inserted. 
+  i=1
+  do while (i <= (LL_new-LL))
+    call random_number(eta)
+    pos = (int(eta*LL_new) + 1) 
+    if (.not.p_taken(pos)) then
+      p_taken(pos) = .TRUE.
+      i=i+1
+    endif
+  enddo
+  
+  n=1   
+  do ip = 1, LL_new
+    if (p_taken(ip)) then
+      ! insert an additional identity
+      opstring_new(ip)%i = 0
+      opstring_new(ip)%j = 0
+    else	! carry over the old operator string
+      opstring_new(ip) = opstring(n)
+      n = n + 1
+    endif
+  enddo
+  
+  deallocate(opstring); allocate(opstring(LL_new))
+  
+  do ip = 1, LL_new
+    opstring(ip) = opstring_new(ip)
+  enddo
+  
+  ! Check that the expansion order has been maintained
+  n_exp_new = 0
+  do ip = 1, LL_new
+    if( .not.((opstring(ip)%i == 0).and.(opstring(ip)%j == 0)) ) then
+      ! non-trivial operator encountered
+      n_exp_new = n_exp_new + 1
+    endif
+  enddo
+  
+  if (n_exp_new /= config%n_exp) then
+    print*, "subroutine increase_cutoff: n_exp_new = ", n_exp_new, "  n_exp = ", config%n_exp
+    print*, "Exiting ..."
+    stop
+  endif
+  
+  ! Update the only entry of the structure 'config'
+  ! which has changed.
+  config%LL = LL_new
+  
+  deallocate(p_taken); deallocate(opstring_new)
+  
+end subroutine extend_cutoff
 
 end module 

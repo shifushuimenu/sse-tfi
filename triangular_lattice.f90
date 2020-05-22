@@ -16,29 +16,28 @@
 !           .AND. (p1%Bsite == p2%Bsite) &
 !           .AND. (p1%Csite == p2%Csite) )         
 ! END FUNCTION   
-! 
-! 2. Replace cyclic_shift() by intrinsic function CSHIFT()     
+!    
 ! 3. Object-oriented design 
 ! 4. Bravais lattice as parent class
 
 MODULE lattice
+    USE SSE_configuration, only: t_Plaquette
     IMPLICIT NONE
     PRIVATE
-        
-    ! triangular plaquette type for plaquette-based cluster update
-    TYPE :: t_Plaquette
-      INTEGER :: Asite
-      INTEGER :: Bsite
-      INTEGER :: Csite
-    END TYPE
 
+    PUBLIC coord 
     PUBLIC t_Plaquette
     PUBLIC init_lattice_triangular
     PUBLIC unit_test
+    PUBLIC Struct
+        
+    ! Information about lattice structure 
+    TYPE Struct 
+        integer :: Nsites
+    END TYPE Struct 
 
-    INTEGER, PARAMETER, PUBLIC :: A_UPDATE=111 
-    INTEGER, PARAMETER, PUBLIC :: B_UPDATE=112
-    INTEGER, PARAMETER, PUBLIC :: C_UPDATE=113
+  ! coordination number
+    INTEGER :: coord = 6
 
     CONTAINS
 
@@ -65,7 +64,7 @@ SUBROUTINE init_lattice_triangular( &
              neigh, sublattice, & 
              plaquettes )    
              
-! *************************************************************
+! *******************************************************************
 ! Purpose:
 ! --------
 !    Initialize variables specifying a triangular lattice with
@@ -73,7 +72,7 @@ SUBROUTINE init_lattice_triangular( &
 !    for plaquette-based updates, see Ref. [1]-
 ! 
 !    With periodic boundary conditions the number of plaquettes
-!    is equal to the number of sites. 
+!    is equal to twice the number of sites. 
 !
 ! Input: 
 ! ------
@@ -92,17 +91,16 @@ SUBROUTINE init_lattice_triangular( &
 !       belongs to sublattice 1 (2, 3). See Ref. [1] for a 
 !       justification of why this is important. 
 !
-!  NOTE: If the pointer arrays `neigh(:,:)`, `sublattice(:)`,
-!  and `plaquettes(:)` are not already allocated in the calling 
-!  routine, they will be allocated in this routine and 
-!  the called subroutines. 
-! *************************************************************          
+! NOTE 1: If the pointer arrays `neigh(:,:)`, `sublattice(:)`,
+! and `plaquettes(:)` are not already allocated in the calling 
+! routine, they will be allocated in this routine and 
+! the called subroutines. 
+! NOTE 2: With periodic boundary conditions a triangular lattice
+! has 2*n_sites plaquettes (including up and down-triangles).
+! *******************************************************************          
    
   IMPLICIT NONE
-  
-  ! coordination number
-  INTEGER :: coord = 6
-  
+    
   INTEGER, INTENT(IN)  :: nx, ny
   INTEGER, ALLOCATABLE, INTENT(OUT) :: neigh(:,:)
   INTEGER, ALLOCATABLE, INTENT(OUT) :: sublattice(:)
@@ -117,7 +115,8 @@ SUBROUTINE init_lattice_triangular( &
   integer :: irA, irB, irC
   integer :: plaq_idx
   integer :: plaq_type
-       
+  integer :: arr(3)     
+
    n = nx*ny    
        
    CALL neighbours_triangular( ny, ny, neigh ) 
@@ -126,8 +125,8 @@ SUBROUTINE init_lattice_triangular( &
    ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~             
    ! ASSIGN NEAREST NEIGHBOUR BONDS TO PLAQUETTE OPERATORS 
    ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-   IF( .NOT.(ALLOCATED(plaquettes)) ) ALLOCATE(plaquettes( n )) 
-   IF (SIZE(plaquettes) /= n) THEN 
+   IF( .NOT.(ALLOCATED(plaquettes)) ) ALLOCATE(plaquettes( 2*n )) 
+   IF (SIZE(plaquettes) /= 2*n) THEN 
        PRINT*, "init_lattice_triangular(): ERROR, inconsistent input"
        PRINT*, "Exiting ..." 
       STOP
@@ -135,10 +134,12 @@ SUBROUTINE init_lattice_triangular( &
    
    plaq_idx = 0
    DO ir = 1, n
-      plaq_idx = plaq_idx + 1
       
-      ! Sites belonging to the triangular plaquette who's 
-      ! lower leftcorner is site `ir`.
+      ! Sites belonging to the "updside" triangular plaquette who's 
+      ! lower left corner is site `ir`.
+      ! (see depiction in the subroutine  'neighbours_triangular')
+      plaq_idx = plaq_idx + 1
+
       irA = neigh(0, ir)
       irB = neigh(1, ir)
       irC = neigh(2, ir)
@@ -155,12 +156,27 @@ SUBROUTINE init_lattice_triangular( &
               plaq_type = 2
       END SELECT
       ! can be simplified since plaq_type = sublattice(ir) - 1
-      CALL cyclic_shift(irA, irB, irC, plaq_type)
+      arr = CSHIFT(array=(/irA, irB, irC/), shift=plaq_type)
       
-      plaquettes(plaq_idx)%Asite = irA
-      plaquettes(plaq_idx)%Bsite = irB
-      plaquettes(plaq_idx)%Csite = irC
+      plaquettes(plaq_idx)%Asite = arr(1)
+      plaquettes(plaq_idx)%Bsite = arr(2)
+      plaquettes(plaq_idx)%Csite = arr(3)
+
+      ! Sites belonging to the "downside" triangular plaquette who's 
+      ! lower right corner is site `ir`.
+      plaq_idx = plaq_idx + 1
+
+      irA = neigh(0, ir)
+      irB = neigh(4, ir)
+      irC = neigh(3, ir)
       
+      ! Note the minus sign for anticyclic shift.
+      arr = CSHIFT(array=(/irA, irB, irC/), shift=-plaq_type)
+      
+      plaquettes(plaq_idx)%Asite = arr(1)
+      plaquettes(plaq_idx)%Bsite = arr(2)
+      plaquettes(plaq_idx)%Csite = arr(3)
+
    ENDDO
   
 #ifdef DEBUG_COMPLETED
@@ -243,8 +259,6 @@ SUBROUTINE neighbours_triangular( nx, ny, neigh )
   INTEGER, ALLOCATABLE, INTENT(OUT) :: neigh(:,:)
   
   INTEGER :: n
-  ! coordination number
-  INTEGER :: coord = 6
   INTEGER :: ix, iy, ir 
   
   ! local automatic arrays for obtaining the nearest neighbour matrix 
@@ -453,7 +467,7 @@ SUBROUTINE unit_test(testfile)
     IF( PRESENT(testfile) ) THEN
         default_testfile = testfile
     ELSE
-        default_testfile="unit_tests/triangular_lattice.test"
+        default_testfile="../unit_tests/triangular_lattice.test"
     ENDIF 
           
     print*, TRIM(default_testfile)

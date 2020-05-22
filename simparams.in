@@ -1,0 +1,19 @@
+! =================================================
+! Simulation parameters for the program 'ssetfi'
+! 
+! SSE QMC simulation of the transverse-field Ising 
+! model. 
+! =================================================
+
+&SIMPARAMS
+J_1 		= +1.0
+hx  		= 0.6
+beta 		= 4.0
+nx   		= 3
+ny   		= 3
+n_sites 	= 9
+ntherm_step = 10000
+nmeas_step  = 10000
+Nbin        = 100
+/ 
+! Slash terminates namelist statement. DO NOT REMOVE 
