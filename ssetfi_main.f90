@@ -44,6 +44,8 @@ subroutine one_MCS_plaquette(beta, Jij_sign, spins, opstring, &
             Jij_sign=Jij_sign, spins=spins, opstring=opstring, &
             config=config, probtable=probtable, plaquettes=plaquettes,&
             update_type=ut)
+        print*, "plaquettes=", plaquettes
+        print*, "opstring=", opstring 
         call build_linkedlist_plaquette( &
             opstring=opstring, config=config, &
             vertexlink=vertexlink, leg_visited=leg_visited )        
@@ -79,14 +81,14 @@ subroutine init_SSEconfig_hostart( n_sites, LL, config, &
     config%n2leg = 0
     config%n4leg = 0 
     config%n6leg = 0
-    config%n_ghostlegs = MAX_GHOSTLEGS*config%n_exp
+    config%n_ghostlegs = MAX_GHOSTLEGS*config%LL
     config%n_legs = 2*config%n2leg+4*config%n4leg+6*config%n6leg
 
     ! IMPROVE: For triangular lattice with PBC only:
     ! Assign n_plaquettes from the lattice structure S
     config%n_plaquettes=2*n_sites
 
-    allocate( opstring(LL) )
+    allocate(opstring(LL))
     do ip=1, LL
         opstring(ip)%i = 0; opstring(ip)%j = 0
     enddo 
@@ -219,9 +221,8 @@ program ssetfi
     call init_SSEconfig_hostart( n_sites=nx*ny, LL=10, config=config, &
         opstring=opstring, spins=spins, vertexlink=vertexlink, leg_visited=leg_visited )
 
-
-
     do it = 1, ntherm_step
+    
         call one_MCS_plaquette( beta=beta, Jij_sign=Jij_sign, spins=spins, &
             opstring=opstring, config=config, probtable=probtable, &
             plaquettes=plaquettes, vertexlink=vertexlink, &

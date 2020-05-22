@@ -302,10 +302,9 @@ endif !identity encountered
 
 enddo !do ip=1,LL
 
-! update convenience variables that have not been explicitly 
+! update convenience variable that has not been explicitly 
 ! updated
-config%n_ghostlegs = MAX_GHOSTLEGS*config%LL ! stays actually constand during diag. update
-config%n_legs = 2*config%n2leg+4*config%n4leg+6*config%n6leg
+    config%n_legs = 2*config%n2leg+4*config%n4leg+6*config%n6leg
 
 deallocate(spins2)
 
@@ -610,9 +609,10 @@ subroutine extend_cutoff(opstring, config)
     stop
   endif
   
-  ! Update the only entry of the structure 'config'
-  ! which has changed.
+  ! Update the only entries of the structure 'config'
+  ! which have changed.
   config%LL = LL_new
+  config%n_ghostlegs = MAX_GHOSTLEGS*config%LL
   
   deallocate(p_taken); deallocate(opstring_new)
   

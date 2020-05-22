@@ -480,7 +480,7 @@ elseif( (i1.ne.0).and.(i2.eq.i1) ) then
     endif
 else
     print*, "cluster update: strange operator detected"
-    print*, "ip=", ip, "i1=", i1, "i2=",i2
+    print*, "ip=", ip, "i1=", i1, "i2=",i2, "i3=", opstring(ip)%k
     stop
 endif
 
