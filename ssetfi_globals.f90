@@ -7,7 +7,6 @@ module ssetfi_globals
     integer, allocatable  :: sublattice(:)
     integer, allocatable  :: neigh(:,:)
     
-    integer, parameter :: A_UPDATE=1, B_UPDATE=2, C_UPDATE=3
     type(t_Plaquette), allocatable :: plaquettes(:)
     
     real(dp), allocatable :: J_interaction_matrix(:,:)

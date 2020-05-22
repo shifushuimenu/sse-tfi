@@ -36,10 +36,11 @@ SUBROUTINE diagonal_update_plaquette( beta, Jij_sign, &
 
 use SSE_configuration
 use lattice
-use ssetfi_globals, only: A_UPDATE, B_UPDATE, C_UPDATE
 
 ! use probtables 
 implicit none
+
+integer, parameter :: A_UPDATE=111, B_UPDATE=112, C_UPDATE=113
 
 real(dp), intent(in) :: beta          ! inverse temperature 
 integer, intent(in) :: Jij_sign(:,:)  ! sign of the interaction bond (i,j): FM (<0) or AFM (>0)
