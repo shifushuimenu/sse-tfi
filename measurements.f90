@@ -284,7 +284,7 @@ module measurements
         COparam = COparam * 3.0_dp / float(Nsites)
 
         open(100, file='TS.dat', position='append', status='unknown')
-        write(100, *) energy, magnz, magnz2, spins2binrep(spins), COparam
+        write(100, *) energy, magnz, magnz2, spins2binrep(spins), COparam, config%n_exp, - config%n_exp / beta + consts_added
         close(100)    
 
         P0%meas(P0_ENERGY, tmp) = energy

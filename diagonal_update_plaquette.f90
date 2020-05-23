@@ -123,48 +123,48 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
 ! is inserted. There is no risk of the search never ending as a constant can always be inserted (for h unequal 0 !).
 
     if (index1.ne.index2) then	!Ising operator, index1 and index2 not equal 0 by construction
-    if ( Jij_sign(index1, index2).gt.0 ) then !AFM
-      if (spins2(index1).ne.spins2(index2)) then
-        OP_INSERTED = .TRUE.
-        if (index1.lt.index2) then
-          opstring(ip)%i = index1
-          opstring(ip)%j = index2
-        else
-          opstring(ip)%i = index2
-          opstring(ip)%j = index1
-        endif
-        ! 	Expansion order changes as n_exp -> n_exp + 1
+      if ( Jij_sign(index1, index2).gt.0 ) then !AFM
+        if (spins2(index1).ne.spins2(index2)) then
+          OP_INSERTED = .TRUE.
+          if (index1.lt.index2) then
+            opstring(ip)%i = index1
+            opstring(ip)%j = index2
+          else
+            opstring(ip)%i = index2
+            opstring(ip)%j = index1
+          endif
+          ! 	Expansion order changes as n_exp -> n_exp + 1
 #ifdef DEBUG_DIAGONAL_UPDATE
-  print*, "insert an AFM Ising operator"
+    print*, "insert an AFM Ising operator"
 #endif       
-	      config%n_exp = config%n_exp + 1; config%n4leg = config%n4leg + 1
-        ! update P_add and  P_remove
-        P_remove = float(( config%LL - config%n_exp + 1)) &
-          / ( float(config%LL- config%n_exp + 1) + beta*probtable%sum_all_diagmatrix_elements )
-        P_add = beta*probtable%sum_all_diagmatrix_elements &
-          / ( float(config%LL-config%n_exp) + beta*probtable%sum_all_diagmatrix_elements )
-    endif
-    elseif ( Jij_sign(index1,index2).lt.0 ) then !FM	
-      if (spins2(index1).eq.spins2(index2)) then
-        OP_INSERTED = .TRUE.
-        if (index1.lt.index2) then
-          opstring(ip)%i = index1
-          opstring(ip)%j = index2
-        else
-          opstring(ip)%i = index2
-          opstring(ip)%j = index1
+          config%n_exp = config%n_exp + 1; config%n4leg = config%n4leg + 1
+          ! update P_add and  P_remove
+          P_remove = float(( config%LL - config%n_exp + 1)) &
+            / ( float(config%LL- config%n_exp + 1) + beta*probtable%sum_all_diagmatrix_elements )
+          P_add = beta*probtable%sum_all_diagmatrix_elements &
+            / ( float(config%LL-config%n_exp) + beta*probtable%sum_all_diagmatrix_elements )
         endif
+      elseif ( Jij_sign(index1,index2).lt.0 ) then !FM	
+        if (spins2(index1).eq.spins2(index2)) then
+          OP_INSERTED = .TRUE.
+          if (index1.lt.index2) then
+            opstring(ip)%i = index1
+            opstring(ip)%j = index2
+          else
+            opstring(ip)%i = index2
+            opstring(ip)%j = index1
+          endif
 #ifdef DEBUG_DIAGONAL_UPDATE
-  print*, "insert an FM Ising operator"
+    print*, "insert an FM Ising operator"
 #endif             
-        config%n_exp = config%n_exp + 1; config%n4leg = config%n4leg + 1
-        ! update P_add and  P_remove
-        P_remove = float(( config%LL - config%n_exp + 1)) &
-          / ( float(config%LL- config%n_exp + 1) + beta*probtable%sum_all_diagmatrix_elements )
-        P_add = beta*probtable%sum_all_diagmatrix_elements &
-          / ( float(config%LL-config%n_exp) + beta*probtable%sum_all_diagmatrix_elements )
-    endif
-    endif
+          config%n_exp = config%n_exp + 1; config%n4leg = config%n4leg + 1
+          ! update P_add and  P_remove
+          P_remove = float(( config%LL - config%n_exp + 1)) &
+            / ( float(config%LL- config%n_exp + 1) + beta*probtable%sum_all_diagmatrix_elements )
+          P_add = beta*probtable%sum_all_diagmatrix_elements &
+            / ( float(config%LL-config%n_exp) + beta*probtable%sum_all_diagmatrix_elements )
+        endif
+      endif
     else !index1.eq.index2 => constant operator to be inserted
     ! There is no constraint on inserting constants
         OP_INSERTED = .TRUE.
@@ -179,24 +179,26 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
           / ( float(config%LL- config%n_exp + 1) + beta*probtable%sum_all_diagmatrix_elements )
         P_add = beta*probtable%sum_all_diagmatrix_elements &
           / ( float(config%LL-config%n_exp) + beta*probtable%sum_all_diagmatrix_elements )
-   endif !index1.ne.index2
+    endif !index1.ne.index2
 
-   else
+   ELSE
     ! Try to insert a triangular plaquette operator 
     ! Select the plaquette number 
     call random_number(prob)
 
     ! IMPROVE: There must be a simpler expression if all plaquettes have the 
     ! same weight. 
-    FOUND = .FALSE.; k=1
-    do while (.not.FOUND)
-      if (k <= (config%n_plaquettes * prob) ) then
-        k=k+1
-      else
-        plaq_idx = k
-        FOUND=.TRUE.
-      endif
-    enddo  
+    ! FOUND = .FALSE.; k=1
+    ! do while (.not.FOUND)
+    !   if (k <= (config%n_plaquettes * prob) ) then
+    !     k=k+1
+    !   else
+    !     plaq_idx = k
+    !     FOUND=.TRUE.
+    !   endif
+    ! enddo  
+    plaq_idx = ceiling(config%n_plaquettes * prob)
+
   
   ! Check whether the spin configuration is minimally frustrated so that 
   ! the insertion of a plaquette operator is allowed.
@@ -242,7 +244,7 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
        opstring(ip)%PRIVILEGED_LEG_IS_MAJORITY_LEG = .FALSE.
      endif     
 #ifdef DEBUG_DIAGONAL_UPDATE
-  print*, "insert a minimally frustrated plaquette operator"
+  print*, "insert a minimally frustrated plaquette operator, plaq_idx=", plaq_idx, "ut=", update_type
 #endif          
      config%n_exp = config%n_exp + 1; config%n6leg = config%n6leg + 1 
      ! update P_add and  P_remove
@@ -457,7 +459,7 @@ subroutine init_probtables( J_interaction_matrix, hx, &
   n = size(J_interaction_matrix, 1)
   ! Hamiltonian matrix elements on the computational, i.e. the Sz - basis
 
-  ! Matrix elements have only two values, 2*abs(J_ij) and h:
+  ! Matrix elements have only two values, 2*abs(J_ij) and hx:
   M_ij(:,:) = 2*dabs(J_interaction_matrix(:,:))
   do ir=1,n
     M_ij(ir,ir) = hx
@@ -583,7 +585,7 @@ subroutine extend_cutoff(opstring, config)
       ! insert an additional identity
       opstring_new(ip)%i = 0
       opstring_new(ip)%j = 0
-    else	! carry over the old operator string
+    else  ! carry over the old operator string
       opstring_new(ip) = opstring(n)
       n = n + 1
     endif

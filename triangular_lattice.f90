@@ -135,7 +135,7 @@ SUBROUTINE init_lattice_triangular( &
    plaq_idx = 0
    DO ir = 1, n
       
-      ! Sites belonging to the "updside" triangular plaquette who's 
+      ! Sites belonging to the "upside" triangular plaquette who's 
       ! lower left corner is site `ir`.
       ! (see depiction in the subroutine  'neighbours_triangular')
       plaq_idx = plaq_idx + 1
