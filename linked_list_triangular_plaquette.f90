@@ -229,11 +229,15 @@ do i=1, config%n_sites
 enddo
 
 ! TO DO: Traverse linked list and check for missing links
+! Also check that there are no identities among the operators 
+! connected by the linked list. 
 #if defined(DEBUG_CLUSTER_UPDATE)
   leg_counter = 0
   do i=1, config%n_ghostlegs
     if (vertexlink(i) /= -1) then 
       leg_counter = leg_counter + 1 
+      ip = (i-1)/MAX_GHOSTLEGS + 1
+      print*, "ip=", ip, "leg=", i, "opstring(ip)=", opstring(ip)
       if (i /=  vertexlink(vertexlink(i))) then 
         print*, "ERROR: linked list is inconsistent"
         print*, "leg=",i, "vertexlink(vertexlink(i))=",vertexlink(vertexlink(i))
