@@ -26,7 +26,7 @@ subroutine build_linkedlist_plaquette( &
 ! convention for numbering of vertex legs:                      !
 !                                                               !
 !   Ising operator:		Spin-flip operator or constant: !
-!  (3)           (4)  [5,6]           (2)   [3,4,5,6]           !
+!  (4)           (5)  [3,6]           (4)   [2,3,5,6]           !
 !   |_____________|                    |                        !
 !   |             |                    |                        !
 !  (1)           (2)                  (1)                       !
@@ -56,10 +56,6 @@ integer :: lastleg( config%n_sites )
 
 integer :: i, ip, i1, i2, leg_counter
 integer :: ir_A, ir_B, ir_C
-
-!REMOVE
-print*, "config%n_ghostlegs=",config%n_ghostlegs
-!REMOVE
 
 if( allocated(vertexlink) ) deallocate(vertexlink)
 allocate(vertexlink(config%n_ghostlegs))
@@ -172,12 +168,12 @@ if ( (i1.gt.0).and.(i2.gt.0).and.(i1.ne.i2) ) then
   ! upper two legs
   ! Note the convention for the labelling of legs 
   ! around a 4-leg vertex
-  lastleg(i2) = leg_counter + 4
-  lastleg(i1) = leg_counter + 3  
+  lastleg(i2) = leg_counter + 5
+  lastleg(i1) = leg_counter + 4  
   ! mark the 'ghostlegs' as 'visited' so that they are 
   ! not used as starting legs for constructing a cluster
   ! during the off-diagonal update 
-  leg_visited(leg_counter + 5) = .TRUE.
+  leg_visited(leg_counter + 3) = .TRUE.
   leg_visited(leg_counter + 6) = .TRUE.
   ! increment leg counter using 'ghostlegs' so that 
   ! ever vertex is associated with MAX_GHOSTLEGS legs.  
@@ -197,10 +193,10 @@ IF( (i1 /= 0).and.((i2 == 0).or.(i2 == i1)) ) THEN
     firstleg(i1) = leg_counter + 1
   ENDIF  
   ! upper leg
-  lastleg(i1) = leg_counter + 2  
+  lastleg(i1) = leg_counter + 4  
   ! mark 'ghostlegs' as 'visited'
+  leg_visited(leg_counter + 2) = .TRUE.
   leg_visited(leg_counter + 3) = .TRUE.
-  leg_visited(leg_counter + 4) = .TRUE.
   leg_visited(leg_counter + 5) = .TRUE.
   leg_visited(leg_counter + 6) = .TRUE.
   leg_counter = leg_counter + MAX_GHOSTLEGS
@@ -233,6 +229,7 @@ enddo
 ! connected by the linked list. 
 #if defined(DEBUG_CLUSTER_UPDATE)
   leg_counter = 0
+  print*, "vertexlink=", vertexlink(:)
   do i=1, config%n_ghostlegs
     if (vertexlink(i) /= -1) then 
       leg_counter = leg_counter + 1 

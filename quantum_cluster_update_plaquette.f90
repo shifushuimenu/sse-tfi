@@ -14,7 +14,8 @@ integer, parameter :: A_LEG=1, B_LEG=2, C_LEG=3
 
 contains 
 
-pure function gleg_to_ir(op, gleg) result(ir)
+! pure function gleg_to_ir(op, gleg) result(ir)
+function gleg_to_ir(op, gleg) result(ir)
 ! ***************************************************************
 ! Purpose: 
 ! --------
@@ -37,7 +38,7 @@ pure function gleg_to_ir(op, gleg) result(ir)
     ! have the same value of 'vleg_mod'        
     integer :: vleg_mod   
     
-    ip = gleg / MAX_GHOSTLEGS + 1
+    ip = (gleg-1) / MAX_GHOSTLEGS + 1
     vleg = mod(gleg-1, MAX_GHOSTLEGS) + 1
     vleg_mod = mod(vleg-1, MAX_GHOSTLEGS/2) + 1
     
@@ -62,6 +63,8 @@ pure function gleg_to_ir(op, gleg) result(ir)
             ir = op%i
     end select 
         
+    print*, "operator type=", operator_type(op), "ir=", ir, "vleg_mod=", vleg_mod, 'gleg=', gleg
+
 end function
 
 ! IMPROVE: This function should be removed in favour 
@@ -81,7 +84,7 @@ pure function leg_direction(opstring, gleg) result(dir)
     ! vleg is the leg number around a vertex
     integer :: vleg 
 
-    ip = gleg / MAX_GHOSTLEGS + 1
+    ip = (gleg-1) / MAX_GHOSTLEGS + 1
     ! Site %i and %j are just needed to determine the operator type.
     site_i = opstring(ip)%i 
     site_j = opstring(ip)%j
@@ -218,7 +221,7 @@ do while( LEGS_TO_BE_PROCESSED )
         dir = leg_direction(opstring, leg)     
         print*, "dir=", dir
         if( (leg_next - leg)*dir < 0 ) then
-            ip = leg_next / MAX_GHOSTLEGS + 1 
+            ip = (leg_next-1) / MAX_GHOSTLEGS + 1 
             print*, "ip=", ip
                     ! REMOVE
                     l = operator_type(opstring(ip))
@@ -306,7 +309,7 @@ integer :: leg1, leg2, leg3, leg4, leg5
 ! Find the operator to which the leg is connected
 ! and which leg it is in a numbering scheme 
 ! relative to the given vertex. 
-ip = gleg / MAX_GHOSTLEGS + 1
+ip = (gleg-1) / MAX_GHOSTLEGS + 1
 vleg = mod(gleg-1, MAX_GHOSTLEGS) + 1
 
 ! i1 and i2 are just needed to determine the operator type
@@ -444,20 +447,20 @@ elseif( (i1.gt.0).and.(i2.gt.0).and.(i1.ne.i2) ) then
     ! Extract the three other legs, put them on the stack and mark them.
     if( vleg == 1 ) then 
         leg1 = gleg + 1
-        leg2 = gleg + 2
-        leg3 = gleg + 3       
+        leg2 = gleg + 3
+        leg3 = gleg + 4       
     elseif( vleg == 2 ) then 
         leg1 = gleg - 1
-        leg2 = gleg + 1
-        leg3 = gleg + 2
-    elseif( vleg == 3 ) then 
-        leg1 = gleg - 2
-        leg2 = gleg - 1
-        leg3 = gleg + 1        
-    elseif( vleg == 4) then 
-        leg1 = gleg - 1
+        leg2 = gleg + 2
+        leg3 = gleg + 3
+    elseif( vleg == 4 ) then 
+        leg1 = gleg - 3
         leg2 = gleg - 2
-        leg3 = gleg - 3 
+        leg3 = gleg + 1        
+    elseif( vleg == 5) then 
+        leg1 = gleg - 1
+        leg2 = gleg - 3
+        leg3 = gleg - 4 
     endif 
     call stack%push_many( (/ leg1, leg2, leg3 /) )
     leg_visited(leg1) = .TRUE.
