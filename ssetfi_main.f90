@@ -44,7 +44,6 @@ subroutine one_MCS_plaquette(beta, Jij_sign, spins, opstring, &
             Jij_sign=Jij_sign, spins=spins, opstring=opstring, &
             config=config, probtable=probtable, plaquettes=plaquettes,&
             update_type=ut)
-        print*, "opstring=", opstring 
         call build_linkedlist_plaquette( &
             opstring=opstring, config=config, &
             vertexlink=vertexlink, leg_visited=leg_visited )        
@@ -163,7 +162,7 @@ program ssetfi
 
     ! TODO: Check input parameters ...
 
-    ! hx = 4.0 + MPI_rank * 0.4
+    hx = 0.1 + MPI_rank * 0.4
     ! beta = 1.0 + MPI_rank * 0.2
 
     if (nmeas_step < Nbin) then 

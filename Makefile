@@ -1,6 +1,6 @@
 # TODO:
 # Replace suffix rules by pattern rules.
-# Include make.sys as dependency.
+# Include make.sys as dependency for all object files.
 
 .SUFFIXES:            # delete all default suffixes 
 .SUFFIXES: .f90 .o    # add suffixes 
@@ -25,10 +25,10 @@ default: all
 all: ssetfi 
 
 
-ssetfi: ${objects} ssetfi_main.f90 make.sys.gfortran
+ssetfi: ${objects} ssetfi_main.f90
 	${F90} $ ${LFLAGS} ${objects} -o ssetfi ssetfi_main.f90
 
-.f90.o:
+.f90.o: 
 	${F90} ${FFLAGS} -c $*.f90
 
 clean:

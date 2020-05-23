@@ -63,7 +63,6 @@ function gleg_to_ir(op, gleg) result(ir)
             ir = op%i
     end select 
         
-    print*, "operator type=", operator_type(op), "ir=", ir, "vleg_mod=", vleg_mod, 'gleg=', gleg
 
 end function
 
@@ -213,21 +212,11 @@ do while( LEGS_TO_BE_PROCESSED )
     do while( .not.stack%is_empty() )
         leg = stack%pop()   
         leg_next = vertexlink(leg)
-        
-        print*, "leg=", leg
-        print*, "leg_next=", leg_next
 
         ! Check for winding macrospin 
         dir = leg_direction(opstring, leg)     
-        print*, "dir=", dir
         if( (leg_next - leg)*dir < 0 ) then
             ip = (leg_next-1) / MAX_GHOSTLEGS + 1 
-            print*, "ip=", ip
-                    ! REMOVE
-                    l = operator_type(opstring(ip))
-                    print*, "operator type=", l
-                    print*, "opstring=",opstring
-                    ! REMOVE 
             ir = gleg_to_ir( opstring(ip), leg_next )
             if( FLIPPING ) WINDING_MACROSPIN(ir) = .TRUE.
         endif 
