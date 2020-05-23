@@ -14,8 +14,7 @@ integer, parameter :: A_LEG=1, B_LEG=2, C_LEG=3
 
 contains 
 
-! pure function gleg_to_ir(op, gleg) result(ir)
-function gleg_to_ir(op, gleg) result(ir)
+pure function gleg_to_ir(op, gleg) result(ir)
 ! ***************************************************************
 ! Purpose: 
 ! --------
@@ -185,6 +184,14 @@ WINDING_MACROSPIN(:) = .FALSE.
 smallest_unvisited_leg = 1 
 LEGS_TO_BE_PROCESSED = .TRUE.
 
+do while(leg_visited(smallest_unvisited_leg))
+    smallest_unvisited_leg = smallest_unvisited_leg + 1
+    if( smallest_unvisited_leg == config%n_ghostlegs) then 
+        LEGS_TO_BE_PROCESSED = .FALSE.
+        exit
+    endif 
+enddo 
+
 do while( LEGS_TO_BE_PROCESSED )
 
     ! Swendsen-Wang: flip cluster or not 
@@ -194,10 +201,6 @@ do while( LEGS_TO_BE_PROCESSED )
     else
         FLIPPING = .FALSE.
     endif 
-
-    do while(leg_visited(smallest_unvisited_leg))
-        smallest_unvisited_leg = smallest_unvisited_leg + 1
-    enddo 
 
     leg_start = smallest_unvisited_leg    
     call stack%push( leg_start )
@@ -269,7 +272,6 @@ enddo
 #ifdef DEBUG_CLUSTER_UPDATE
     print*, "final spin config=", spins(:)
 #endif 
-
 
 end subroutine
 

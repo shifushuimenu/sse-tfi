@@ -191,7 +191,7 @@ program ssetfi
                 if (neigh(k, ir) == jr) then 
                   ! nearest neighbour interactions are already taken 
                   ! care of by the plaquette operators 
-                  J_interaction_matrix(ir, jr) = -1.0_dp
+                  J_interaction_matrix(ir, jr) = -0.0_dp
                 endif 
             enddo
         enddo         
