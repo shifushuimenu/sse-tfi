@@ -7,13 +7,13 @@
 
 &SIMPARAMS
 J_1 		= +1.0
-hx  		= 0.0
-beta 		= 10.0
+hx  		= 0.1
+beta 		= 20.0
 nx   		= 3
 ny   		= 3
 n_sites 	= 9
 ntherm_step = 10000
 nmeas_step  = 10000
-Nbin        = 100
+Nbin        = 10
 / 
 ! Slash terminates namelist statement. DO NOT REMOVE 

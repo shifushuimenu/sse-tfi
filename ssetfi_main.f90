@@ -166,7 +166,7 @@ program ssetfi
     ! seed random number generator with the system time (at the millisecond level)
     call init_RNG(MPI_rank) 
 
-    !hx = 0.1 + MPI_rank * 0.1
+    hx = 0.05 + MPI_rank * 0.1
     ! beta = 1.0 + MPI_rank * 0.2
 
     if (nmeas_step < Nbin) then 
