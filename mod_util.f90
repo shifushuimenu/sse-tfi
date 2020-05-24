@@ -32,6 +32,73 @@ function spins2binrep(spins) result(binrep_integer)
 
 end function 
     
+subroutine rotate(A, l)
+    ! Purpose:
+    ! --------
+    !    Cyclically left-shift the elements of integer array 'A'
+    !    by 'l' positions. 
+    ! Arguments:
+    ! ----------
+        integer, intent(inout) :: A(:)  
+        integer, intent(in)  :: l
+    ! ... Local variables ...
+        integer :: ii, n, s, temp(size(A,1))
+    ! ... Executable ...
+        n = size(A,1)
+        s = mod(l, n)
+        temp(1:s) = A(1:s)
+        do ii = 1, n-s
+            A(ii) = A(ii+s)
+        enddo 
+        A(n-s+1:n) = temp(1:s)
+    end subroutine rotate
+
+    subroutine random_permutation(A)
+    ! Purpose:
+    ! --------
+    !   Randomly permute the elements in the integer array A(:)
+    !   (in place).
+    !
+    ! Arguments:
+    ! ----------
+        integer, intent(inout) :: A(:)
+    ! ... Local variables ...
+        integer :: n, k, l
+        real(dp) :: eta
+    ! ... Executable ...
+        n = size(A,1)
+        do k = n, 2, -1
+            call random_number(eta)
+            l = ceiling(eta * (k-1))
+            call rotate(A(1:k), l)
+        enddo 
+    end subroutine 
+
+    subroutine init_RNG(MPI_rank)
+    ! Purpose:
+    ! --------
+    !    Initialize the standard pseudo-random number generator 
+    !    with a seed obtained from the system time (at the millisecond level)
+    !    and the MPI rank.
+    !    Call the random number generator:
+    !
+    !        integer :: eta
+    !        call random_number(eta)
+    ! Arguments:
+    ! ----------
+        integer, intent(in) :: MPI_rank
+    ! ... Local variables ...
+        integer :: n, values(1:8)
+        integer, allocatable :: seed(:)
+
+        call date_and_time(values=values)
+        call random_seed(size=n)
+        allocate(seed(n))
+        seed(1:n) = values(8) + MPI_rank
+        call random_seed(put=seed)
+
+    end subroutine init_RNG
+
 
 subroutine JackKnife(n, avg, err, x, y, sgn, sum_sgn)
 ! 
