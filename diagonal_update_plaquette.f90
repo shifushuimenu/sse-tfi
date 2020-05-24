@@ -54,7 +54,7 @@ type(t_Plaquette), intent(in) :: plaquettes(:)
 ! if update_type == A_UPDATE => "A-site update
 integer, intent(in) :: update_type   
 
-integer :: ip, i1, i2, index1, index2, k
+integer :: ip, i1, i2, index1, index2
 
 integer :: plaq_idx
 
@@ -485,7 +485,7 @@ cc = cc + (3.0_dp/2.0_dp) * abs(J_1) * n_plaquettes
 probtable%consts_added = cc
 probtable%sum_all_diagmatrix_elements_2or4leg = ss 
 ! include matrix elements from triangular plaquettes 
-probtable%sum_all_diagmatrix_elements = ss + TWO*abs(J_1)*n_plaquettes 
+probtable%sum_all_diagmatrix_elements = ss + TWO*abs(J_1)*n_plaquettes
 
 
 ! Calculate the cumulative probability tables used in the diagonal update

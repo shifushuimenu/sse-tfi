@@ -38,7 +38,7 @@ subroutine one_MCS_plaquette(beta, Jij_sign, spins, opstring, &
     integer :: ut ! update type
 
     ! IMPROVE: no obscure number codes 
-    do ut = 111,113, 1
+    do ut = 111, 113, 1
         ! loop over A-update (=111), B-update (=112) and C-update (=113)
         call diagonal_update_plaquette(beta=beta, &
             Jij_sign=Jij_sign, spins=spins, opstring=opstring, &
@@ -162,7 +162,7 @@ program ssetfi
 
     ! TODO: Check input parameters ...
 
-    hx = 0.1 + MPI_rank * 0.1
+    !hx = 0.1 + MPI_rank * 0.1
     ! beta = 1.0 + MPI_rank * 0.2
 
     if (nmeas_step < Nbin) then 

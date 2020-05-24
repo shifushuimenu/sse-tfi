@@ -84,7 +84,7 @@ SUBROUTINE init_lattice_triangular( &
 !       nearest neighbours of a given site index
 !    sublattice(1:nx*ny) \\in [1,2,3]: sublattice index of a 
 !       linearly stored site index 
-!    plaquettes(1:nx*ny): Array of plaquette structs.
+!    plaquettes(1:2*nx*ny): Array of plaquette structs.
 !       Contains linearly stored indices of the `A-sites`, 
 !       `B-sites`, and `C-sites` of each plaquette. 
 !       By construction the `A-site`(`B-site`, `C-site`) 
@@ -156,19 +156,20 @@ SUBROUTINE init_lattice_triangular( &
               plaq_type = 2
       END SELECT
       ! can be simplified since plaq_type = sublattice(ir) - 1
-      arr = CSHIFT(array=(/irA, irB, irC/), shift=plaq_type)
+      ! Note the minus sign for anticyclic shift.
+      arr = CSHIFT(array=(/irA, irB, irC/), shift=-plaq_type)
       
       plaquettes(plaq_idx)%Asite = arr(1)
       plaquettes(plaq_idx)%Bsite = arr(2)
       plaquettes(plaq_idx)%Csite = arr(3)
 
       ! Sites belonging to the "downside" triangular plaquette who's 
-      ! lower right corner is site `ir`.
+      ! upper right corner is site `ir`.
       plaq_idx = plaq_idx + 1
 
       irA = neigh(0, ir)
-      irB = neigh(4, ir)
-      irC = neigh(3, ir)
+      irB = neigh(5, ir)
+      irC = neigh(4, ir)
       
       ! Note the minus sign for anticyclic shift.
       arr = CSHIFT(array=(/irA, irB, irC/), shift=-plaq_type)
