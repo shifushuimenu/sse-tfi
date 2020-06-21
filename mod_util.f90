@@ -74,7 +74,7 @@ subroutine rotate(A, l)
         enddo 
     end subroutine 
 
-    subroutine init_RNG(MPI_rank)
+    subroutine init_RNG(MPI_rank, DETERMINISTIC)
     ! Purpose:
     ! --------
     !    Initialize the standard pseudo-random number generator 
@@ -87,15 +87,22 @@ subroutine rotate(A, l)
     ! Arguments:
     ! ----------
         integer, intent(in) :: MPI_rank
+        logical, intent(in) :: DETERMINISTIC
     ! ... Local variables ...
         integer :: n, values(1:8)
         integer, allocatable :: seed(:)
 
-        call date_and_time(values=values)
         call random_seed(size=n)
         allocate(seed(n))
-        seed(1:n) = values(8) + MPI_rank
-        call random_seed(put=seed)
+
+        if(DETERMINISTIC) then 
+            seed(1:n) = 42
+            call random_seed(put=seed)
+        else
+            call date_and_time(values=values)
+            seed(1:n) = values(8) + MPI_rank
+            call random_seed(put=seed)
+        endif 
 
     end subroutine init_RNG
 

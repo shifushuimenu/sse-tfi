@@ -1,5 +1,8 @@
 module cluster_update
 
+#ifdef DEBUG_CLUSTER_UPDATE
+use test_helper, only: output_SSE_config
+#endif
 use types, only: dp
 use SSE_configuration 
 implicit none 
@@ -154,12 +157,22 @@ integer, intent(in) :: vertexlink(:)
 logical, intent(inout) :: leg_visited(:) 
 type(t_Config), intent(in) :: config  
     
+! ... Local variables ...
 type(t_Stack) :: stack
 integer :: smallest_unvisited_leg
 logical :: LEGS_TO_BE_PROCESSED
 ! Has the spin at site ir been touched by a cluster ? 
 ! If not, flip it with probability 1/2.
 logical :: touched( config%n_sites ) 
+
+#ifdef DEBUG_CLUSTER_UPDATE
+! Has the operator at propagation step ip been visited by the current Swendsen-Wang cluster ?
+! (only for visualization purposes)
+logical :: visited_ip( config%LL )
+! Space-time lattice of spins 
+integer :: spins_spacetime(config%n_sites, config%LL)
+#endif 
+
 ! FLIPPING indicates whether a Swendsen-Wang cluster should be flipped 
 ! or not (with probability 1/2). 
 logical :: FLIPPING
@@ -173,7 +186,22 @@ integer :: dir
 integer :: ip, ir, l  
 
 #ifdef DEBUG_CLUSTER_UPDATE
+integer :: spins2(size(spins,dim=1))
+integer :: i1, i2, i3
     print*, "initial spin config=", spins(:)
+
+    spins2(:) = spins(:)
+    do ip=1,config%LL
+        i1 = opstring(ip)%i
+        i2 = opstring(ip)%j
+        i3 = opstring(ip)%k
+        spins_spacetime(:, ip) = spins2(:)
+        ! Propagate spins as spin-flip operators are encountered.
+        if ((i1.ne.0).and.(i2.eq.0)) then
+            spins2(i1) = -spins2(i1)
+        endif
+    enddo
+
 #endif 
 
 call stack%init( config%n_legs )  
@@ -201,14 +229,18 @@ do while( LEGS_TO_BE_PROCESSED )
     else
         FLIPPING = .FALSE.
     endif 
-
+    
     leg_start = smallest_unvisited_leg    
     call stack%push( leg_start )
     leg_visited( leg_start ) = .TRUE.        
 #ifdef DEBUG_CLUSTER_UPDATE
     print*, "============================="    
     print*, "process start_leg", leg_start
-#endif     
+    print*, "FLIPPING=", FLIPPING
+    visited_ip(:) = .FALSE.
+    ip = (leg_start-1) / MAX_GHOSTLEGS + 1 
+    visited_ip(ip) = .TRUE.
+#endif    
     call process_leg( leg_start, FLIPPING, opstring, &
                       stack, leg_visited, touched )
     
@@ -227,13 +259,15 @@ do while( LEGS_TO_BE_PROCESSED )
         if( .not.leg_visited(leg_next) ) then 
 #ifdef DEBUG_CLUSTER_UPDATE            
             print*, "process next_leg", leg_next
+            ip = (leg_next-1) / MAX_GHOSTLEGS + 1 
+            visited_ip(ip) = .TRUE.
 #endif             
             leg_visited(leg_next) = .TRUE.                        
             call process_leg( leg_next, FLIPPING, opstring, &
             stack, leg_visited, touched )            
             
         endif 
-        
+
     enddo
 
     ! Which legs have not been processed yet ?
@@ -250,7 +284,36 @@ do while( LEGS_TO_BE_PROCESSED )
         endif 
     enddo
 
+#ifdef DEBUG_CLUSTER_UPDATE
+! Output the SSE configuration after each Swendsed-Wang cluster construction
+    call  output_SSE_config(config, opstring, spins, visited_ip, filename="SSEconfig.dat")
+#endif 
+
 enddo
+
+#ifdef DEBUG_CLUSTER_UPDATE
+        ! Check after every processed leg that plaquette operators still 
+        ! sit on minimally frustrated plaquettes 
+        spins2(:) = spins(:)
+        do ip=1,config%LL
+            i1 = opstring(ip)%i
+            i2 = opstring(ip)%j
+            i3 = opstring(ip)%k
+            if (i1 < 0) then 
+                if(abs(spins2(abs(i1)) + spins2(abs(i2)) + spins2(abs(i3))) /= 1) then 
+                    print*, "ERROR: plaquette operator on maximally frustrated spin config."
+                    print*, "This should not happen. Exiting ..."
+                    stop
+                endif 
+            endif 
+        
+            ! Propagate spins as spin-flip operators are encountered.
+            if ((i1.ne.0).and.(i2.eq.0)) then
+                spins2(i1) = -spins2(i1)
+            endif
+        enddo
+#endif
+
 
 ! AT THE VERY END, WHEN ALL CLUSTERS HAVE BEEN BUILT...
 ! Update the initial spin configuration 
@@ -310,6 +373,11 @@ i2 = opstring(ip)%j
 dir = leg_direction(opstring, gleg)
 
 if( i1.lt.0 ) then
+
+#ifdef DEBUG_CLUSTER_UPDATE
+    print*, "leg connected to triangular plaquette"
+#endif 
+
     ! Triangular plaquette operator encountered.
     ! For triangular plaquettes the cluster construction rules 
     ! are those described in Ref. [1] 

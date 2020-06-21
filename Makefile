@@ -14,6 +14,7 @@ ssetfi_objects =  class_Stack.o \
 	      linked_list_triangular_plaquette.o \
 	      diagonal_update_plaquette.o \
 	      ssetfi_globals.o \
+		  test_helper.o \
 		  quantum_cluster_update_plaquette.o \
 		  measurements.o
 	  
@@ -25,9 +26,11 @@ default: all
 all: ssetfi 
 
 
-ssetfi: ${objects} ssetfi_main.f90
-	${F90} $ ${LFLAGS} ${objects} -o ssetfi ssetfi_main.f90
+ssetfi: ${objects} ssetfi_main.f90 make.sys.gfortran
+	${F90} ${LFLAGS} ${objects} -o ssetfi ssetfi_main.f90
 
+test_suite: ${objects} test_suite.f90 
+	${F90} ${LFLAGS} ${objects} -o test test_suite.f90 
 .f90.o: 
 	${F90} ${FFLAGS} -c $*.f90
 

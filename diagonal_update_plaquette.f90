@@ -185,20 +185,7 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
     ! Try to insert a triangular plaquette operator 
     ! Select the plaquette number 
     call random_number(prob)
-
-    ! IMPROVE: There must be a simpler expression if all plaquettes have the 
-    ! same weight. 
-    ! FOUND = .FALSE.; k=1
-    ! do while (.not.FOUND)
-    !   if (k <= (config%n_plaquettes * prob) ) then
-    !     k=k+1
-    !   else
-    !     plaq_idx = k
-    !     FOUND=.TRUE.
-    !   endif
-    ! enddo  
     plaq_idx = ceiling(config%n_plaquettes * prob)
-
   
   ! Check whether the spin configuration is minimally frustrated so that 
   ! the insertion of a plaquette operator is allowed.
@@ -390,6 +377,7 @@ subroutine init_probtables( J_interaction_matrix, hx, &
 !       The element [i,j] contains the 
 !       interaction between linearly stored sites i and j.
 !    hx: value of the transverse field 
+!    n_plaquettes: number of triangular plaquettes
 !    TRANSLAT_INV: logical
 !       Indicates whether the interactions are translationally 
 !       invariant. In this case the interaction matrix can be 

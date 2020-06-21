@@ -17,6 +17,8 @@ module test_suite
     integer, allocatable :: vertexlink(:)
     logical, allocatable  :: leg_visited(:)
 
+    logical, allocatable :: visited_ip(:)
+
     contains 
 
     subroutine init_test_SSEconfig
@@ -29,13 +31,16 @@ module test_suite
         config%LL = config%n_exp + 1 
         config%n2leg = 4
         config%n4leg = 2 
-        config%n6leg = 0
+        config%n6leg = 2
         config%n_ghostlegs = MAX_GHOSTLEGS*config%n_exp
         config%n_legs = 2*config%n2leg+4*config%n4leg+6*config%n6leg
         config%n_plaquettes = 1
 
         allocate( opstring(config%LL) )
         allocate( spins(config%n_sites) )
+
+        allocate( visited_ip(config%LL) )
+        visited_ip(:) = .true.
 
         opstring(1)%i=1; opstring(1)%j=2
         opstring(2)%i=4; opstring(2)%j=0
@@ -74,9 +79,7 @@ module test_suite
 
     subroutine test_diagonal_update 
         use diagonal_update 
-        use lattice 
-
-        
+        use lattice         
 
     end subroutine 
 
@@ -84,6 +87,9 @@ end module
 
 program unit_test
     use test_suite
+    use test_helper
     implicit none
-    call test_cluster_update
+    ! call test_cluster_update
+    call init_test_SSEconfig
+    call output_SSE_config(config, opstring, spins, 'SSEconfig.dat')
 end program 

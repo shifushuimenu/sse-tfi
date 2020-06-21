@@ -143,6 +143,10 @@ program ssetfi
     integer :: it, im 
     integer :: obs
     integer :: ioerr 
+
+    ! helper
+    real(dp) :: temp
+
     NAMELIST /SIMPARAMS/ J_1, hx, beta, nx, ny, n_sites, nmeas_step, ntherm_step, Nbin
 
 #if defined (USE_MPI)
@@ -164,10 +168,13 @@ program ssetfi
     ! TODO: Check input parameters ...
 
     ! seed random number generator with the system time (at the millisecond level)
-    call init_RNG(MPI_rank) 
+    call init_RNG(MPI_rank, DETERMINISTIC=.TRUE.) 
 
-    hx = 0.05 + MPI_rank * 0.1
-    ! beta = 1.0 + MPI_rank * 0.2
+    !hx = 0.05 + MPI_rank * 0.2
+    !beta = 4 + MPI_rank * 0.5
+    temp = 0.1 !+ MPI_rank * 1.0 / float(MPI_size)
+    beta = 1.d0 / temp
+    !beta = 10**(+MPI_rank*0.1)
 
     if (nmeas_step < Nbin) then 
         print*, "Need nmeas_step >= Nbin."
@@ -195,7 +202,7 @@ program ssetfi
                 if (neigh(k, ir) == jr) then 
                   ! nearest neighbour interactions are already taken 
                   ! care of by the plaquette operators 
-                  J_interaction_matrix(ir, jr) = -0.0_dp
+                  J_interaction_matrix(ir, jr) = 0.0_dp
                 endif 
             enddo
         enddo         
@@ -259,7 +266,7 @@ program ssetfi
             P0%meas(P0_MAGNETIZATION, P0%avg), P0%meas(P0_MAGNETIZATION, P0%err), &
             P0%meas(P0_COPARAM, P0%avg), P0%meas(P0_COPARAM, P0%err)
     open(500, file='averages'//chr_rank//'.dat', position='append', status='unknown')
-    write(500, *) hx, beta, &
+    write(500, *) hx, temp, &
                 !   P0%meas(P0_ENERGY, P0%avg), P0%meas(P0_ENERGY, P0%err), &
                 !   P0%meas(P0_MAGNETIZATION, P0%avg), P0%meas(P0_MAGNETIZATION, P0%err), &
                 !   P0%meas(P0_COPARAM, P0%avg), P0%meas(P0_COPARAM, P0%err)
@@ -271,7 +278,7 @@ program ssetfi
         write(700, *) "The columns in the file averageXXXXX.dat have the following meaning:"
         write(700, *) "Simulation parameters:"
         write(700, *) "transverse field        : 1"
-        write(700, *) "inverse temperatuer beta: 2"
+        write(700, *) "temperature             : 2"
         write(700, *) "Scalar observables: avg, err"
         do obs = 1, P0%Nscalar_prop
             write(700, *) P0_STR(obs), 2 +(obs-1)*2 + 1, 2 +(obs-1)*2 + 2
