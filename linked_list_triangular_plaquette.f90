@@ -77,8 +77,7 @@ leg_counter = 0
 ! **********************************************
 do ip=1, config%LL
 
-! The structure components i1 and i2 are needed to determine the type 
-! of vertex.
+! Determine the type of vertex.
   i1 = opstring(ip)%i  
   i2 = opstring(ip)%j
 

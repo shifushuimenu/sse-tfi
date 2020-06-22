@@ -194,7 +194,8 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
   ! Choose between A-site, B-site, or C-site update 
   ! by identifying a particular sublattice as the "A-sites", which are 
   ! by definition the 'privileged' sites (see Ref. [1]).
-  ! It is only here that the update type of the plaquette update enters. 
+  ! It is only here that the update type ("A-update", "B-update", or "C-update") 
+  ! of the plaquette update enters. 
   if (update_type == A_UPDATE) then
     ir_A = plaquettes(plaq_idx)%Asite
     ir_B = plaquettes(plaq_idx)%Bsite

@@ -253,7 +253,15 @@ do while( LEGS_TO_BE_PROCESSED )
         if( (leg_next - leg)*dir < 0 ) then
             ip = (leg_next-1) / MAX_GHOSTLEGS + 1 
             ir = gleg_to_ir( opstring(ip), leg_next )
-            if( FLIPPING ) WINDING_MACROSPIN(ir) = .TRUE.
+            if( FLIPPING ) then
+                ! Note: The way the code is written a site ir can be checked 
+                ! twice for a winding macrospin. Nonetheless, each site is only 
+                ! visited at most once by any cluster branch. 
+                WINDING_MACROSPIN(ir) = .TRUE.
+#ifdef DEBUG_CLUSTER_UPDATE 
+                print*, "winding macrospin at ir=", ir
+#endif
+            endif 
         endif 
         
         if( .not.leg_visited(leg_next) ) then 
@@ -291,32 +299,11 @@ do while( LEGS_TO_BE_PROCESSED )
 
 enddo
 
-#ifdef DEBUG_CLUSTER_UPDATE
-        ! Check after every processed leg that plaquette operators still 
-        ! sit on minimally frustrated plaquettes 
-        spins2(:) = spins(:)
-        do ip=1,config%LL
-            i1 = opstring(ip)%i
-            i2 = opstring(ip)%j
-            i3 = opstring(ip)%k
-            if (i1 < 0) then 
-                if(abs(spins2(abs(i1)) + spins2(abs(i2)) + spins2(abs(i3))) /= 1) then 
-                    print*, "ERROR: plaquette operator on maximally frustrated spin config."
-                    print*, "This should not happen. Exiting ..."
-                    stop
-                endif 
-            endif 
-        
-            ! Propagate spins as spin-flip operators are encountered.
-            if ((i1.ne.0).and.(i2.eq.0)) then
-                spins2(i1) = -spins2(i1)
-            endif
-        enddo
-#endif
-
-
 ! AT THE VERY END, WHEN ALL CLUSTERS HAVE BEEN BUILT...
 ! Update the initial spin configuration 
+#ifdef DEBUG_CLUSTER_UPDATE
+    print*, "At the very end, flipping all winding macrospins."
+#endif 
 do ir = 1, config%n_sites
     if (WINDING_MACROSPIN(ir)) then
       spins(ir) = -spins(ir)
@@ -331,6 +318,37 @@ do ir = 1, config%n_sites
     endif    
   endif
 enddo
+
+#ifdef DEBUG_CLUSTER_UPDATE
+! Output the final SSE configuration after all custers have been built
+! and after the initial spin configuration has been updated.
+    call  output_SSE_config(config, opstring, spins, visited_ip, filename="SSEconfig.dat")
+#endif 
+
+#ifdef DEBUG_CLUSTER_UPDATE    
+        ! Check after all cluster have been built that 
+        ! plaquette operators still sit on minimally frustrated plaquettes 
+        spins2(:) = spins(:)
+        do ip=1, config%LL
+            i1 = opstring(ip)%i
+            i2 = opstring(ip)%j
+            i3 = opstring(ip)%k
+            if (i1 < 0) then 
+                if(abs(spins2(abs(i1)) + spins2(abs(i2)) + spins2(abs(i3))) /= 1) then 
+                    print*, "ERROR: plaquette operator on maximally frustrated spin config."
+                    print*, spins2(abs(i1)), spins2(abs(i2)), spins2(abs(i3))
+                    print*, "i1=", abs(i1), "i2=", abs(i2), "i3=", abs(i3)
+                    print*, "This should not happen. Exiting ..."
+                    stop
+                endif 
+            endif        
+            ! Propagate spins as spin-flip operators are encountered.
+            if ((i1 > 0).and.(i2 == 0)) then
+                spins2(i1) = -spins2(i1)
+            endif
+        enddo
+#endif
+
 
 #ifdef DEBUG_CLUSTER_UPDATE
     print*, "final spin config=", spins(:)
@@ -355,7 +373,7 @@ logical, intent(out)                :: leg_visited(:)
 logical, intent(out)                :: touched(:)
 
 ! local variables 
-integer :: ip, i1, i2
+integer :: ip, i1, i2, i3
 integer :: dir 
 integer :: vleg, vleg_mod
 integer :: leg1, leg2, leg3, leg4, leg5 
@@ -369,6 +387,7 @@ vleg = mod(gleg-1, MAX_GHOSTLEGS) + 1
 ! i1 and i2 are just needed to determine the operator type
 i1 = opstring(ip)%i
 i2 = opstring(ip)%j
+i3 = opstring(ip)%k
 
 dir = leg_direction(opstring, gleg)
 
@@ -381,6 +400,7 @@ if( i1.lt.0 ) then
     ! Triangular plaquette operator encountered.
     ! For triangular plaquettes the cluster construction rules 
     ! are those described in Ref. [1] 
+    touched((/abs(i1), abs(i2), abs(i3)/)) = .TRUE.
 
     vleg_mod = mod(vleg-1, MAX_GHOSTLEGS/2) + 1
     ! Whether an update is an A-update, B-update, or C-update
@@ -500,8 +520,7 @@ if( i1.lt.0 ) then
 elseif( (i1.gt.0).and.(i2.gt.0).and.(i1.ne.i2) ) then
     ! Ising operator encountered
 
-    touched(i1) = .TRUE.
-    touched(i2) = .TRUE.
+    touched((/i1, i2/)) = .TRUE.
 
     ! Extract the three other legs, put them on the stack and mark them.
     if( vleg == 1 ) then 

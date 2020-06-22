@@ -91,5 +91,5 @@ program unit_test
     implicit none
     ! call test_cluster_update
     call init_test_SSEconfig
-    call output_SSE_config(config, opstring, spins, 'SSEconfig.dat')
+    call output_SSE_config(config, opstring, spins, visited_ip, 'SSEconfig.dat')
 end program 

@@ -25,7 +25,7 @@ module SSE_configuration
     end type  
   
     type :: t_BondOperator
-    ! operator in the SSE string; includes all operator types 
+    ! operator in the SSE string; includes all operator types (Ising, spin-flip, constant, triangular plaquette)
     integer :: i
     integer :: j
     ! the following variables are only relevant for triangular plaquette operators
@@ -36,12 +36,6 @@ module SSE_configuration
     ! The privileged site is always the 'A-site'. The lower leg on the 'A-site' always 
     ! has the lowest leg index around the vertex. To which sublattice an 'A-site' belongs
     ! is chosen during the diagonal update. 
-    ! => the variable privleg is not necessary 
-    ! REMOVE
-    ! integer :: privleg ! privleg \ in [1,2,3]: leg number of the privileged leg. 
-    !       ! 1 = A-site, 2 = B-site, 3 = C-site
-    !       ! If privleg = 1 (2,3), then 4 (5,6) is also a privileged leg. 
-    ! REMOVE
     end type t_BondOperator
   
     ! for plaquette-based cluster update
