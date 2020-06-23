@@ -170,9 +170,9 @@ program ssetfi
     ! seed random number generator with the system time (at the millisecond level)
     call init_RNG(MPI_rank, DETERMINISTIC=.TRUE.) 
 
-    !hx = 0.05 + MPI_rank * 0.2
+    hx = 0.05 + MPI_rank * 0.4 / float(MPI_size)
     !beta = 4 + MPI_rank * 0.5
-    temp = 0.1 !+ MPI_rank * 1.0 / float(MPI_size)
+    temp = 0.1 !+ MPI_rank * 10.0 / float(MPI_size)
     beta = 1.d0 / temp
     !beta = 10**(+MPI_rank*0.1)
 
@@ -202,7 +202,7 @@ program ssetfi
                 if (neigh(k, ir) == jr) then 
                   ! nearest neighbour interactions are already taken 
                   ! care of by the plaquette operators 
-                  J_interaction_matrix(ir, jr) = 0.0_dp
+                  J_interaction_matrix(ir, jr) = +0.0_dp
                 endif 
             enddo
         enddo         

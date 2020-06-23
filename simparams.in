@@ -1,19 +1,22 @@
-! =================================================
+! ========================================================
 ! Simulation parameters for the program 'ssetfi'
 ! 
 ! SSE QMC simulation of the transverse-field Ising 
 ! model. 
-! =================================================
+! 
+! In total, `nmeas_step` measurement steps are performed,
+! which are split into `Nbin` bins. 
+! ========================================================
 
 &SIMPARAMS
-J_1 		= +1.0
-hx  		= 0.1
-beta 		= 20.0
+J_1 		= 1.0 ! +1.0
+hx  		= 2.0
+beta 		= 10.0
 nx   		= 3
 ny   		= 3
 n_sites 	= 9
-ntherm_step = 10000
-nmeas_step  = 10000
+ntherm_step = 100000
+nmeas_step  = 100000
 Nbin        = 10
 / 
 ! Slash terminates namelist statement. DO NOT REMOVE 
