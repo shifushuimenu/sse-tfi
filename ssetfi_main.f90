@@ -170,9 +170,9 @@ program ssetfi
     ! seed random number generator with the system time (at the millisecond level)
     call init_RNG(MPI_rank, DETERMINISTIC=.TRUE.) 
 
-    hx = 0.05 + MPI_rank * 0.4 / float(MPI_size)
+    !hx = 0.05 + MPI_rank * 0.4 / float(MPI_size)
     !beta = 4 + MPI_rank * 0.5
-    temp = 0.1 !+ MPI_rank * 10.0 / float(MPI_size)
+    temp = 0.1 + MPI_rank * 10.0 / float(MPI_size)
     beta = 1.d0 / temp
     !beta = 10**(+MPI_rank*0.1)
 
