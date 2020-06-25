@@ -275,7 +275,7 @@ endif !identity encountered
     else ! constant or plaquette operator 
       if ( i1.ne.i2 ) then ! Ising operator removed
         config%n4leg = config%n4leg - 1
-      elseif (i1.eq.i2) then ! constant removed ! IMPROVE: This "elseif" can be replace directly by "else"
+      elseif (i1.eq.i2) then ! constant removed 
         config%n2leg = config%n2leg - 1
       else
           STOP "diagonal_update(): ERROR: trying to remove unknown operator type"
@@ -449,7 +449,8 @@ subroutine init_probtables( J_interaction_matrix, hx, &
   ! Hamiltonian matrix elements on the computational, i.e. the Sz - basis
 
   ! Matrix elements have only two values, 2*abs(J_ij) and hx:
-  M_ij(:,:) = 2*dabs(J_interaction_matrix(:,:))
+  M_ij(:,:) = dabs(J_interaction_matrix(:,:)) ! TWO*dabs(J_interaction_matrix(:,:))
+
   do ir=1,n
     M_ij(ir,ir) = hx
   enddo
@@ -524,6 +525,15 @@ do ir = 1, n
     probtable%P_cumulsecond(ir,k) = probtable%P_cumulsecond(ir,k) / norm
   enddo
 enddo
+
+! !REMOVE
+! print*, "P_cumulfirst", probtable%P_cumulfirst(:)
+! print*, "P_cumulsecond"
+! do ir = 1,n
+!   print*, ir, probtable%P_cumulsecond(ir,:)
+! enddo
+! stop
+! !REMOVE
 
 end subroutine 
 
