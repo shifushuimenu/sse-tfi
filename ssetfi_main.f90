@@ -125,16 +125,23 @@ program ssetfi
 
     ! ****************************************
     ! simulation parameters                  !
-    ! ****************************************
+    ! ***********************************************
     REAL(dp) :: J_1 = +1.0_dp    
     real(dp) :: hx = 0.60_dp   
-    real(dp) :: beta = 5.0_dp    
+    real(dp) :: temp = 0.1_dp
+    real(dp) :: beta 
     integer :: nx, ny, n_sites             
 
     integer :: nmeas_step = 10000
     integer :: ntherm_step = 10000 
     integer :: Nbin = 100
-    ! ****************************************
+    character(len=10) :: lattice_type = "triangular"
+    logical :: ignore_Jmatrix = .FALSE.
+    character(len=30) :: Jmatrix_file = "Jmatrix.txt"
+    character(len=12) :: paramscan
+    real(dp) :: scan_min = 0.0, scan_max = 0.0
+    logical :: deterministic = .FALSE.
+    ! ***********************************************
 
     type(Phys) :: P0
     type(Struct) :: S
@@ -144,10 +151,11 @@ program ssetfi
     integer :: obs
     integer :: ioerr 
 
-    ! helper
-    real(dp) :: temp
+    real(dp), allocatable :: J_matrix_out(:,:)
 
-    NAMELIST /SIMPARAMS/ J_1, hx, beta, nx, ny, n_sites, nmeas_step, ntherm_step, Nbin
+    NAMELIST /SIMPARAMS/ J_1, hx, temp, nx, ny, n_sites, nmeas_step, ntherm_step, Nbin, &
+        lattice_type, ignore_Jmatrix, Jmatrix_file, paramscan, &
+        scan_min, scan_max, deterministic
 
 #if defined (USE_MPI)
     include "mpif.h"
@@ -167,14 +175,15 @@ program ssetfi
 
     ! TODO: Check input parameters ...
 
-    ! seed random number generator with the system time (at the millisecond level)
-    call init_RNG(MPI_rank, DETERMINISTIC=.TRUE.) 
-
-    !hx = 0.05 + MPI_rank * 0.4 / float(MPI_size)
-    !beta = 4 + MPI_rank * 0.5
-    temp = 0.1 + MPI_rank * 10.0 / float(MPI_size)
+    if(trim(paramscan) == "parampoint") then 
+        print*, "Simulating hx=", hx, "temp=", temp
+    elseif(trim(paramscan) == "paramscan_hx")  then 
+        hx = scan_min + MPI_rank * (scan_max - scan_min)/ float(MPI_size)
+    elseif(trim(paramscan) == "paramscan_T") then 
+        temp = scan_min + MPI_rank * (scan_max - scan_min)/ float(MPI_size)
+    endif 
     beta = 1.d0 / temp
-    !beta = 10**(+MPI_rank*0.1)
+
 
     if (nmeas_step < Nbin) then 
         print*, "Need nmeas_step >= Nbin."
@@ -186,40 +195,106 @@ program ssetfi
         stop
     endif 
 
-    S%Nsites = n_sites
+    if(lattice_type == "triangular") then         
+        call init_lattice_triangular(nx=nx, ny=ny, &
+            S=S, neigh=neigh, sublattice=sublattice, plaquettes=plaquettes) 
+        if (S%Nsites /= n_sites) then 
+            print*, "Error: S%Nsites /= n_sites"
+            stop
+        endif
+    else
+        print*, "Error: unknown lattice type"
+        stop
+    endif 
 
-    call init_lattice_triangular(nx=nx, ny=ny, &
-        neigh=neigh, sublattice=sublattice, plaquettes=plaquettes) 
     ! Specify interactions beyond nearest neighbours 
     ! Nearest neighbour interactions are already taken care 
     ! of by the plaquette operators. 
-    allocate( J_interaction_matrix(n_sites,n_sites) )
-    allocate( Jij_sign(n_sites, n_sites) )
-    J_interaction_matrix(:,:) = 0.0_dp
-    do ir = 1, n_sites
-        do jr = 1, n_sites
-            do k = 1, coord
+    allocate( J_interaction_matrix(S%Nsites,S%Nsites) )
+    allocate( Jij_sign(S%Nsites, S%Nsites) )
+    if(ignore_Jmatrix) then 
+        J_interaction_matrix(:,:) = ZERO
+    else
+        open(100, file=trim(Jmatrix_file), action="read", status="old")
+        print*, "reading ", Jmatrix_file
+        do i=1,S%Nsites
+            read(100, *) J_interaction_matrix(i,1:S%Nsites)
+        enddo
+        print*, J_interaction_matrix(:,:)
+        close(100)
+    endif 
+    ! J_interaction_matrix(:,:) = 0.0_dp
+    ! do ir = 1, S%Nsites
+    !     do jr = 1, S%Nsites
+    !         do k = 1, S%coord
+    !             if (neigh(k, ir) == jr) then 
+    !               ! nearest neighbour interactions are already taken 
+    !               ! care of by the plaquette operators 
+    !               J_interaction_matrix(ir, jr) = -0.0_dp
+    !             endif 
+    !         enddo
+    !     enddo         
+    ! enddo   
+
+
+    ! Output the interaction matrix, which is the combination of the 
+    ! input interaction matrix and the nearest neighbour interactions `J_1`.
+    allocate( J_matrix_out(S%Nsites,S%Nsites) )   
+
+    ! ! REMOVE
+    ! ! Interaction matrix with FM next-nearest neighbour interactions
+    ! J_matrix_out(:,:) = 0.0_dp
+    ! do ir = 1, S%Nsites
+    !     do jr = 1, S%Nsites
+    !         do k = 1, S%coord
+    !             if (neigh(k, neigh(k, ir)) == jr) then 
+    !               ! nearest neighbour interactions are already taken 
+    !               ! care of by the plaquette operators 
+    !               J_matrix_out(ir, jr) = -0.1_dp
+    !             endif 
+    !         enddo
+    !     enddo         
+    ! enddo       
+    ! open(101, file="Jmatrix_nnFM.dat", status="unknown", action="write")
+    ! do ir = 1, n_sites
+    !     write(101, *) ( J_matrix_out(ir, jr), jr = 1, n_sites )
+    ! enddo 
+    ! close(101)
+    ! J_matrix_out(:,:) = 0.0_dp
+    ! ! REMOVE
+    J_matrix_out(:,:) = J_interaction_matrix(:,:)
+    do ir = 1, S%Nsites
+        do jr = 1, S%Nsites
+            do k = 1, S%coord
                 if (neigh(k, ir) == jr) then 
-                  ! nearest neighbour interactions are already taken 
-                  ! care of by the plaquette operators 
-                  J_interaction_matrix(ir, jr) = +0.0_dp
+                  ! Nearest neighbour interactions are already taken 
+                  ! care of by the plaquette operators. Include them 
+                  ! here so that J_matrix_out(:,:) can be used as input 
+                  ! for exact diagonalization.
+                  J_matrix_out(ir, jr) = J_1 + J_interaction_matrix(ir, jr)
                 endif 
             enddo
         enddo         
     enddo   
+    if( MPI_rank == root_rank) then 
+        print*, "writing Jmatrix.dat"
+        open(100, file="Jmatrix.dat", status="unknown", action="write")
+        do ir = 1, S%Nsites
+            write(100, *) ( J_matrix_out(ir, jr), jr = 1, S%Nsites )
+        enddo 
+        close(100)
+        deallocate( J_matrix_out )
+        open(201, file="sublattice.dat", status="unknown", action="write")
+        do ir = 1, n_sites 
+            write(201, *) ir, sublattice(ir)
+        enddo 
+        close(201)
+    endif 
+    stop
+    ! REMOVE
 
-    ! REMOVE
-    open(100, file="Jmatrix.dat", status="unknown", action="write")
-    do ir = 1, n_sites
-        write(100, *) ( J_interaction_matrix(ir, jr), jr = 1, n_sites )
-    enddo 
-    close(100)
-    open(101, file="sublattice.dat", status="unknown", action="write")
-    do ir = 1, n_sites 
-        write(101, *) ir, sublattice(ir)
-    enddo 
-    close(101)
-    ! REMOVE
+    ! seed random number generator with the system time (at the millisecond level)
+    call init_RNG(MPI_rank, DETERMINISTIC=deterministic) 
 
     ! Precompute the probability tables from which diagonal operators 
     ! will be sampled. 
@@ -230,8 +305,7 @@ program ssetfi
     call init_SSEconfig_hostart( n_sites=nx*ny, LL=10, config=config, &
         opstring=opstring, spins=spins, vertexlink=vertexlink, leg_visited=leg_visited )
 
-    do it = 1, ntherm_step
-    
+    do it = 1, ntherm_step    
         call one_MCS_plaquette( beta=beta, Jij_sign=Jij_sign, spins=spins, &
             opstring=opstring, config=config, probtable=probtable, &
             plaquettes=plaquettes, vertexlink=vertexlink, &
@@ -261,7 +335,7 @@ program ssetfi
     call Phys_GetErr(P0)
 
     ! Output (clean up !)
-    print*, hx, beta, &
+    print*, hx, temp, &
             P0%meas(P0_ENERGY, P0%avg), P0%meas(P0_ENERGY, P0%err), &
             P0%meas(P0_MAGNETIZATION, P0%avg), P0%meas(P0_MAGNETIZATION, P0%err), &
             P0%meas(P0_COPARAM, P0%avg), P0%meas(P0_COPARAM, P0%err)

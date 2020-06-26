@@ -96,7 +96,7 @@ subroutine rotate(A, l)
         allocate(seed(n))
 
         if(DETERMINISTIC) then 
-            seed(1:n) = 42
+            seed(1:n) = 43 + MPI_rank
             call random_seed(put=seed)
         else
             call date_and_time(values=values)

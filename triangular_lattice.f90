@@ -25,19 +25,18 @@ MODULE lattice
     IMPLICIT NONE
     PRIVATE
 
-    PUBLIC coord 
     PUBLIC t_Plaquette
     PUBLIC init_lattice_triangular
     PUBLIC unit_test
     PUBLIC Struct
         
     ! Information about lattice structure 
-    TYPE Struct 
-        integer :: Nsites
+    TYPE Struct       
+        integer :: coord ! coordination number
+        integer :: Nbravais_sites 
+        integer :: Nbasis
+        integer :: Nsites ! Nsites = Nbravais_sites * Nbasis
     END TYPE Struct 
-
-  ! coordination number
-    INTEGER :: coord = 6
 
     CONTAINS
 
@@ -61,7 +60,7 @@ END FUNCTION
     
 SUBROUTINE init_lattice_triangular( &
              nx, ny, &
-             neigh, sublattice, & 
+             S, neigh, sublattice, & 
              plaquettes )    
              
 ! *******************************************************************
@@ -80,6 +79,7 @@ SUBROUTINE init_lattice_triangular( &
 
 ! Output:
 ! -------
+!    S: type(Struct), lattice structure object 
 !    neigh(0:6, 1:nx*ny): lineraly stored indices of the 
 !       nearest neighbours of a given site index
 !    sublattice(1:nx*ny) \\in [1,2,3]: sublattice index of a 
@@ -91,17 +91,14 @@ SUBROUTINE init_lattice_triangular( &
 !       belongs to sublattice 1 (2, 3). See Ref. [1] for a 
 !       justification of why this is important. 
 !
-! NOTE 1: If the pointer arrays `neigh(:,:)`, `sublattice(:)`,
-! and `plaquettes(:)` are not already allocated in the calling 
-! routine, they will be allocated in this routine and 
-! the called subroutines. 
-! NOTE 2: With periodic boundary conditions a triangular lattice
+! NOTE: With periodic boundary conditions a triangular lattice
 ! has 2*n_sites plaquettes (including up and down-triangles).
 ! *******************************************************************          
    
   IMPLICIT NONE
     
   INTEGER, INTENT(IN)  :: nx, ny
+  TYPE(Struct), INTENT(OUT) :: S
   INTEGER, ALLOCATABLE, INTENT(OUT) :: neigh(:,:)
   INTEGER, ALLOCATABLE, INTENT(OUT) :: sublattice(:)
   TYPE (t_Plaquette), ALLOCATABLE, INTENT(OUT) :: plaquettes(:)    
@@ -117,10 +114,15 @@ SUBROUTINE init_lattice_triangular( &
   integer :: plaq_type
   integer :: arr(3)     
 
-   n = nx*ny    
-       
-   CALL neighbours_triangular( ny, ny, neigh ) 
-   CALL sublattice_triangular( nx, ny, sublattice ) 
+  n = nx*ny   
+
+  S%coord = 6
+  S%Nsites = n
+  S%Nbravais_sites = n
+  S%Nbasis = 1
+   
+  CALL neighbours_triangular( ny, ny, S, neigh ) 
+  CALL sublattice_triangular( nx, ny, sublattice ) 
    
    ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~             
    ! ASSIGN NEAREST NEIGHBOUR BONDS TO PLAQUETTE OPERATORS 
@@ -235,7 +237,7 @@ SUBROUTINE cyclic_shift(A, B, C, n)
 END SUBROUTINE
 
 
-SUBROUTINE neighbours_triangular( nx, ny, neigh )
+SUBROUTINE neighbours_triangular( nx, ny, S, neigh )
 
 ! *****************************************************************
 ! Purpose:
@@ -257,6 +259,7 @@ SUBROUTINE neighbours_triangular( nx, ny, neigh )
   IMPLICIT NONE 
 
   INTEGER, INTENT(IN) :: nx, ny
+  TYPE(Struct), INTENT(IN) :: S
   INTEGER, ALLOCATABLE, INTENT(OUT) :: neigh(:,:)
   
   INTEGER :: n
@@ -275,9 +278,9 @@ SUBROUTINE neighbours_triangular( nx, ny, neigh )
   
   n = nx*ny
   
-  IF( .NOT.(ALLOCATED(neigh)) ) ALLOCATE(neigh(0:coord, n))
+  IF( .NOT.(ALLOCATED(neigh)) ) ALLOCATE(neigh(0:S%coord, n))
   ! In case the array has been allocated incorrectly before ...
-  IF( SIZE(neigh,1) /= (coord+1) .OR. SIZE(neigh,2) /= n ) THEN
+  IF( SIZE(neigh,1) /= (S%coord+1) .OR. SIZE(neigh,2) /= n ) THEN
       PRINT*, "neighbours_triangular(): ERROR, inconsistent input"
       PRINT*, "Exiting ..."      
       STOP
@@ -459,6 +462,7 @@ SUBROUTINE unit_test(testfile)
     INTEGER, ALLOCATABLE :: neigh(:,:), neigh_exp(:,:)
     INTEGER, ALLOCATABLE :: sublattice(:), sublattice_exp(:)
     TYPE (t_Plaquette), ALLOCATABLE :: plaquettes(:), plaquettes_exp(:)      
+    TYPE (Struct) :: S
     ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     
     NAMELIST /PARAMS/ nx, ny
@@ -487,7 +491,7 @@ SUBROUTINE unit_test(testfile)
     ! routine to be checked: Generate data structures and compare with 
     ! expected values read from file. 
     CALL init_lattice_triangular( nx, ny, &
-          neigh, sublattice, plaquettes )
+          S, neigh, sublattice, plaquettes )
     !~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~          
     
     ! expected values read from file 

@@ -448,8 +448,10 @@ subroutine init_probtables( J_interaction_matrix, hx, &
   n = size(J_interaction_matrix, 1)
   ! Hamiltonian matrix elements on the computational, i.e. the Sz - basis
 
-  ! Matrix elements have only two values, 2*abs(J_ij) and hx:
-  M_ij(:,:) = dabs(J_interaction_matrix(:,:)) ! TWO*dabs(J_interaction_matrix(:,:))
+  ! Matrix elements have only two values, TWO*abs(J_ij) and hx:
+  ! The factor TWO is not necessary if a bond can be represented both as (i1, j1) and (j1, i1),
+  ! which is the choice taken in this code.  
+  M_ij(:,:) = dabs(J_interaction_matrix(:,:)) ! TWO*dabs(J_interaction_matrix(:,:)) 
 
   do ir=1,n
     M_ij(ir,ir) = hx

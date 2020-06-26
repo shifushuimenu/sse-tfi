@@ -4,19 +4,69 @@
 ! SSE QMC simulation of the transverse-field Ising 
 ! model. 
 ! 
-! In total, `nmeas_step` measurement steps are performed,
-! which are split into `Nbin` bins. 
+! =========================================================
+! Explanation of parameters:
+! ~~~~~~~~~~~~~~~~~~~~~~~~~~
+! J_1: J_1 \in {+1, 0} required
+!   Nearest-neighbour Sz-Sz interaction. J_1 = +1 
+!   corresponds to AFM interaction, which is treated via a 
+!   plaquette SSE update. J_1 = 0 deactivates the plaquette 
+!   update. 
+! nx, ny:
+!   Number of unit cells in x- and y-direction, respectively.
+! n_sites: n_sites = nx*ny*nbasis
+!   Total number of lattice sites. `nbasis` is the number of 
+!   sites in the motif of the lattice, e.g. for the kagome
+!   lattice set n_sites = nx*ny*3. 
+! lattice_type = ["triangular", "kagome"]
+!   Underlying lattice for which a plaquette update should 
+!   be used.     
+! Jmatrix_file = "Jmatrix.txt":
+!   Name of the file where the interaction matrix `Jmatrix(:,:)`
+!   of shape (n_sites*n_basis, n_sites*n_basis) is stored. 
+!   Jmatrix(i,j) specifies Sz-Sz interaction between lattice 
+!   site i and j, which is treated via a bond-based SSE 
+!   update. Jmatrix(i,j) > 0 corresponds to AFM interactions.
+!   Plaquette-based update and bond-based update can be 
+!   combined. In this case, the interactions given by
+!   Jmatrix(:,:) and the nearest neighbour interaction given 
+!   by J_1 add up. Long-range interactions should be specified
+!   via the interaction matrix. 
+! nmeas_step, Nbin :
+!   In total, `nmeas_step` measurement steps are performed,
+!   which are split into `Nbin` bins. 
+! paramscan:
+!   One of the string constants "parampoint", "paramscan_hx"
+!   "paramscan_T".
+!   For "parampoint", the MPI parallelization is over MCS 
+!   steps for a single parameter point (hx, temp). 
+!   For "paramscan_hx" or "paramscan_T", different MPI jobs
+!   simulate different values of the transverse field `hx` 
+!   or the temperature `temp` in equidistant steps 
+!   between `scan_min` and `scan_max`.
+! deterministic: logical variable
+!   If `deterministic` == T, the pseudo RNG is seeded with 
+!   a fixed value and the MPI rank (good for debugging). 
+!   If `deterministic` == F, the RNG is seeded from the 
+!   system time (at the millisecond level) and from the MPI 
+!   rank (for production runs). 
 ! ========================================================
-
 &SIMPARAMS
-J_1 		= 1.0 ! +1.0
-hx  		= 2.0
-beta 		= 10.0
+J_1 		= 1.0  ! +1.0
+hx  		= 0.8  ! hx > 0 required
+temp 		= 0.1
 nx   		= 3
 ny   		= 3
 n_sites 	= 9
-ntherm_step = 100000
-nmeas_step  = 100000
+lattice_type = "triangular"
+ignore_Jmatrix = F
+Jmatrix_file = "Jmatrix_nnFM.dat" 
+ntherm_step = 10000
+nmeas_step  = 10000
 Nbin        = 10
+paramscan   = "paramscan_T"
+scan_min    = 0.1
+scan_max    = 10.0
+deterministic = T
 / 
 ! Slash terminates namelist statement. DO NOT REMOVE 
