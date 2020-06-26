@@ -22,6 +22,7 @@
 
 MODULE lattice
     USE SSE_configuration, only: t_Plaquette
+    USE types
     IMPLICIT NONE
     PRIVATE
 
@@ -126,6 +127,7 @@ SUBROUTINE init_lattice_triangular( &
    
    ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~             
    ! ASSIGN NEAREST NEIGHBOUR BONDS TO PLAQUETTE OPERATORS 
+   ! (for triangular lattice)
    ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
    IF( .NOT.(ALLOCATED(plaquettes)) ) ALLOCATE(plaquettes( 2*n )) 
    IF (SIZE(plaquettes) /= 2*n) THEN 
@@ -245,15 +247,17 @@ SUBROUTINE neighbours_triangular( nx, ny, S, neigh )
 ! Allocate and assign the nearest neighbours of each lattice site 
 ! for a triangular lattice of dimensions (nx, ny).
 ! Fix the lattice geometry with periodic boundary conditions,
-! by fixing the nearest-neighbour matrix
-
+! by fixing the nearest-neighbour (and next-nearest neighbour) matrix
+!
+!                 8
 !           | 3       | 2
-!             |     | 
+!      9      |     |       7
 !              |  |
-!      -- 4 ---- 0 ------1--  
+!      ---4----- 0 ------1--- 
 !              |  |
-!            |      |
+!     10     |      |       12
 !          | 5        | 6
+!               11
 ! *****************************************************************
   
   IMPLICIT NONE 
@@ -272,15 +276,12 @@ SUBROUTINE neighbours_triangular( nx, ny, S, neigh )
   INTEGER :: diag_leftdown( nx*ny )
   INTEGER :: diag_leftup( nx*ny )
   INTEGER :: diag_rightdown( nx*ny )   
-  
-  ! when debugging 
-  INTEGER :: nn
-  
+    
   n = nx*ny
   
-  IF( .NOT.(ALLOCATED(neigh)) ) ALLOCATE(neigh(0:S%coord, n))
+  IF( .NOT.(ALLOCATED(neigh)) ) ALLOCATE(neigh(0:2*S%coord, n))
   ! In case the array has been allocated incorrectly before ...
-  IF( SIZE(neigh,1) /= (S%coord+1) .OR. SIZE(neigh,2) /= n ) THEN
+  IF( SIZE(neigh,1) /= (2*S%coord+1) .OR. SIZE(neigh,2) /= n ) THEN
       PRINT*, "neighbours_triangular(): ERROR, inconsistent input"
       PRINT*, "Exiting ..."      
       STOP
@@ -372,6 +373,12 @@ SUBROUTINE neighbours_triangular( nx, ny, S, neigh )
       neigh(4,ir) = x_back(ir)
       neigh(5,ir) = diag_leftdown(ir)
       neigh(6,ir) = diag_rightdown(ir)
+      neigh(7,ir) = diag_rightup(x_forw(ir))
+      neigh(8,ir) = diag_leftup(diag_rightup(ir))
+      neigh(9,ir) = diag_leftup(x_back(ir))
+      neigh(10,ir) = diag_leftdown(x_back(ir))
+      neigh(11,ir) = diag_leftdown(diag_rightdown(ir))
+      neigh(12,ir) = diag_rightdown(x_forw(ir))
    ENDDO 
 
 END SUBROUTINE     

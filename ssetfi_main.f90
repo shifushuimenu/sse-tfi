@@ -181,6 +181,9 @@ program ssetfi
         hx = scan_min + MPI_rank * (scan_max - scan_min)/ float(MPI_size)
     elseif(trim(paramscan) == "paramscan_T") then 
         temp = scan_min + MPI_rank * (scan_max - scan_min)/ float(MPI_size)
+    else
+        print*, "ERROR: Unknown value of input parameter `paramscan`"
+        stop
     endif 
     beta = 1.d0 / temp
 
@@ -220,7 +223,6 @@ program ssetfi
         do i=1,S%Nsites
             read(100, *) J_interaction_matrix(i,1:S%Nsites)
         enddo
-        print*, J_interaction_matrix(:,:)
         close(100)
     endif 
     ! J_interaction_matrix(:,:) = 0.0_dp
@@ -241,15 +243,13 @@ program ssetfi
     ! input interaction matrix and the nearest neighbour interactions `J_1`.
     allocate( J_matrix_out(S%Nsites,S%Nsites) )   
 
-    ! ! REMOVE
+    ! ! ! REMOVE
     ! ! Interaction matrix with FM next-nearest neighbour interactions
     ! J_matrix_out(:,:) = 0.0_dp
     ! do ir = 1, S%Nsites
     !     do jr = 1, S%Nsites
-    !         do k = 1, S%coord
-    !             if (neigh(k, neigh(k, ir)) == jr) then 
-    !               ! nearest neighbour interactions are already taken 
-    !               ! care of by the plaquette operators 
+    !         do k = S%coord+1, 2*S%coord 
+    !             if (neigh(k, ir) == jr) then ! next-nearest neighbours 
     !               J_matrix_out(ir, jr) = -0.1_dp
     !             endif 
     !         enddo
@@ -260,8 +260,8 @@ program ssetfi
     !     write(101, *) ( J_matrix_out(ir, jr), jr = 1, n_sites )
     ! enddo 
     ! close(101)
-    ! J_matrix_out(:,:) = 0.0_dp
-    ! ! REMOVE
+    J_matrix_out(:,:) = 0.0_dp
+    ! REMOVE
     J_matrix_out(:,:) = J_interaction_matrix(:,:)
     do ir = 1, S%Nsites
         do jr = 1, S%Nsites
@@ -290,7 +290,6 @@ program ssetfi
         enddo 
         close(201)
     endif 
-    stop
     ! REMOVE
 
     ! seed random number generator with the system time (at the millisecond level)
