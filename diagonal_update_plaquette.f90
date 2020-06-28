@@ -411,7 +411,7 @@ subroutine init_probtables( S, J_interaction_matrix, hx, &
   ! array of the matrix elements of the bond operators, i.e. h for i=j and 2|J_ij| else
   real(dp) :: M_ij( size(J_interaction_matrix, 1), size(J_interaction_matrix, 1) )
   ! relative probabilities for choosing the first index of an Ising operator
-  real(dp) :: P_first( size(J_interaction_matrix, 1) )	
+  real(dp) :: P_first( size(J_interaction_matrix, 1) )
   integer :: n
   real(dp) :: cc, ss
 
@@ -484,18 +484,21 @@ if (trim(S%lattice_type) == "triangular") then
   cc = cc + (3.0_dp/2.0_dp) * abs(J_1) * n_plaquettes
 elseif (trim(S%lattice_type) == "kagome") then 
   ! Kagome Llattice 
-  cc = cc + (3.0_dp/4.0_dp) * abs(J_1) * n_plaquettes
-  print*, "cc=", cc
-  stop
+  cc = cc + 3.0_dp * abs(J_1) * n_plaquettes
 else
   stop "init_probtables(): Unknown lattice type."
 endif 
 
 probtable%consts_added = cc
 probtable%sum_all_diagmatrix_elements_2or4leg = ss 
-! include matrix elements from triangular plaquettes 
-probtable%sum_all_diagmatrix_elements = ss + TWO*abs(J_1)*n_plaquettes
-
+! include matrix elements from triangular plaquettes (of the Hamiltonian shifted by the constants)
+if (trim(S%lattice_type) == "triangular") then 
+  probtable%sum_all_diagmatrix_elements = ss + 2.0_dp * abs(J_1) * n_plaquettes
+elseif (trim(S%lattice_type) == "kagome") then 
+  probtable%sum_all_diagmatrix_elements = ss + 4.0_dp * abs(J_1) * n_plaquettes
+else
+  stop "init_probtables(): Unknown lattice type."
+endif 
 
 ! Calculate the cumulative probability tables used in the diagonal update
 ! for the insertion of diagonal 2leg and 4leg vertices. 

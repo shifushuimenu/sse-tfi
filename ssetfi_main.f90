@@ -82,10 +82,6 @@ subroutine init_SSEconfig_hostart( S, LL, config, &
     config%n_ghostlegs = MAX_GHOSTLEGS*config%LL
     config%n_legs = 2*config%n2leg+4*config%n4leg+6*config%n6leg
 
-    ! IMPROVE: For triangular lattice with PBC only:
-    ! Assign n_plaquettes from the lattice structure S
-    config%n_plaquettes=S%Nbravais_sites
-
     allocate(opstring(LL))
     do ip=1, LL
         opstring(ip)%i = 0; opstring(ip)%j = 0; opstring(ip)%k = 0
@@ -212,7 +208,9 @@ program ssetfi
         print*, "Error: S%Nsites /= n_sites. Please check the lattice type."
         stop
     endif
-
+    ! IMPROVE: Assign n_plaquettes from the lattice structure S
+    ! or better replace config%n_plaquettes everywhere by a component of S
+    config%n_plaquettes=size(plaquettes, dim=1)
 
     ! Specify interactions beyond nearest neighbours 
     ! Nearest neighbour interactions are already taken care 
@@ -222,12 +220,20 @@ program ssetfi
     if(ignore_Jmatrix) then 
         J_interaction_matrix(:,:) = ZERO
     else
-        open(100, file=trim(Jmatrix_file), action="read", status="old")
-        print*, "reading ", Jmatrix_file
-        do i=1,S%Nsites
-            read(100, *) J_interaction_matrix(i,1:S%Nsites)
-        enddo
-        close(100)
+        if (MPI_rank == root_rank) then 
+            open(100, file=trim(Jmatrix_file), action="read", status="old")
+            print*, "reading ", Jmatrix_file
+            do i=1,S%Nsites
+                read(100, *) J_interaction_matrix(i,1:S%Nsites)
+            enddo
+            close(100)
+        endif
+#if defined(USE_MPI)        
+        ! IMPROVE: replace MPI_DOUBLE in some way by real(dp) so that 
+        ! the code does not break if dp is set to single precision 
+        call MPI_BCAST( J_interaction_matrix, size(J_interaction_matrix), &
+            MPI_DOUBLE, root_rank, MPI_COMM_WORLD, ierr )
+#endif             
     endif 
     ! J_interaction_matrix(:,:) = 0.0_dp
     ! do ir = 1, S%Nsites

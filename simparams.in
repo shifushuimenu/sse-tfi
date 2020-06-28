@@ -53,20 +53,20 @@
 ! ========================================================
 &SIMPARAMS
 J_1 		= 1.0  ! +1.0
-hx  		= 2.0  ! hx > 0 required
-temp 		= 0.2
+hx  		= 0.1  ! hx > 0 required
+temp 		= 0.1
 nx   		= 2
 ny   		= 2
 n_sites 	= 12
 lattice_type = "kagome"
 ignore_Jmatrix = T
-Jmatrix_file = "J3_std.txt"  !"Jmatrix_nnFM.dat" 
+Jmatrix_file = "Jmatrix_kagome2x2_FM.dat"  !"Jmatrix_nnFM.dat" 
 ntherm_step = 10000
 nmeas_step  = 10000
 Nbin        = 10
 paramscan   = "paramscan_hx"
 scan_min    = 0.1
-scan_max    = 2.0
+scan_max    = 3.0
 deterministic = T
 / 
 ! Slash terminates namelist statement. DO NOT REMOVE 
