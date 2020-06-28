@@ -364,7 +364,7 @@ PURE FUNCTION binary_search(cumul_prob_table, prob) RESULT(idx)
 END FUNCTION binary_search
 
 
-subroutine init_probtables( J_interaction_matrix, hx, &
+subroutine init_probtables( S, J_interaction_matrix, hx, &
     probtable, Jij_sign, J_1, n_plaquettes, TRANSLAT_INV )
 ! *******************************************************************
 ! Purpose:
@@ -374,6 +374,7 @@ subroutine init_probtables( J_interaction_matrix, hx, &
 
 ! Input:
 ! ------
+!    S: lattice structure object
 !    J_interaction_matrix: 2D array of shape (n_sites, n_sitess)
 !       The element [i,j] contains the 
 !       interaction between linearly stored sites i and j.
@@ -394,8 +395,10 @@ subroutine init_probtables( J_interaction_matrix, hx, &
 ! 
 ! *******************************************************************
   use SSE_configuration 
+  use lattice
   implicit none 
 
+  type(Struct), intent(in)       :: S
   real(dp), intent(in)           :: J_interaction_matrix(:,:)
   real(dp), intent(in)           :: hx
   type(t_ProbTable), intent(out) :: probtable 
@@ -446,8 +449,12 @@ subroutine init_probtables( J_interaction_matrix, hx, &
 
   ! number of lattice sites 
   n = size(J_interaction_matrix, 1)
-  ! Hamiltonian matrix elements on the computational, i.e. the Sz - basis
+  if( n /= S%Nsites ) then 
+    print*, "ERROR: init_probtables(): n /= S%Nsites "
+    stop
+  endif 
 
+  ! Hamiltonian matrix elements on the computational, i.e. the Sz - basis
   ! Matrix elements have only two values, TWO*abs(J_ij) and hx:
   ! The factor TWO is not necessary if a bond can be represented both as (i1, j1) and (j1, i1),
   ! which is the choice taken in this code.  
@@ -472,7 +479,17 @@ do ir=1, n
 enddo
 
 ! see Ref. [1]
-cc = cc + (3.0_dp/2.0_dp) * abs(J_1) * n_plaquettes
+if (trim(S%lattice_type) == "triangular") then 
+  ! Triangular lattice 
+  cc = cc + (3.0_dp/2.0_dp) * abs(J_1) * n_plaquettes
+elseif (trim(S%lattice_type) == "kagome") then 
+  ! Kagome Llattice 
+  cc = cc + (3.0_dp/4.0_dp) * abs(J_1) * n_plaquettes
+  print*, "cc=", cc
+  stop
+else
+  stop "init_probtables(): Unknown lattice type."
+endif 
 
 probtable%consts_added = cc
 probtable%sum_all_diagmatrix_elements_2or4leg = ss 

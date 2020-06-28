@@ -10,7 +10,7 @@ include ./make.sys.gfortran
 modules = mod_types.o mod_util.o mod_MPI_parallel.o
 ssetfi_objects =  class_Stack.o \
 		  SSE_configuration.o \
-	      triangular_lattice.o \
+	      lattice.o \
 	      linked_list_triangular_plaquette.o \
 	      diagonal_update_plaquette.o \
 	      ssetfi_globals.o \

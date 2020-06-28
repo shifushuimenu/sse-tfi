@@ -25,14 +25,15 @@ MODULE lattice
     USE types
     IMPLICIT NONE
     PRIVATE
+    SAVE
 
-    PUBLIC t_Plaquette
     PUBLIC init_lattice_triangular
     PUBLIC unit_test
     PUBLIC Struct
         
     ! Information about lattice structure 
     TYPE Struct       
+        character(len=30) :: lattice_type
         integer :: coord ! coordination number
         integer :: Nbravais_sites 
         integer :: Nbasis
@@ -117,6 +118,7 @@ SUBROUTINE init_lattice_triangular( &
 
   n = nx*ny   
 
+  S%lattice_type = "triangular"
   S%coord = 6
   S%Nsites = n
   S%Nbravais_sites = n

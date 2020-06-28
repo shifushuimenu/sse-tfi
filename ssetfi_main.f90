@@ -55,14 +55,14 @@ subroutine one_MCS_plaquette(beta, Jij_sign, spins, opstring, &
 end subroutine 
 
 
-subroutine init_SSEconfig_hostart( n_sites, LL, config, &
+subroutine init_SSEconfig_hostart( S, LL, config, &
     opstring, spins, vertexlink, leg_visited )
     ! ***********************************************************
     ! Initialize the operator string with identities.
     ! Set the spin configuration at propagation step 1 randomly. 
     ! ***********************************************************
 
-    integer, intent(in) :: n_sites
+    type(Struct), intent(in) :: S
     integer, intent(in) :: LL
     type(t_Config), intent(out) :: config 
     type(t_BondOperator), allocatable, intent(out) :: opstring(:)
@@ -73,7 +73,7 @@ subroutine init_SSEconfig_hostart( n_sites, LL, config, &
     integer :: ip, ir 
     real(dp) :: prob
 
-    config%n_sites = n_sites
+    config%n_sites = S%Nsites  ! IMPROVE: avoid duplication of information in different structs 
     config%n_exp = 0
     config%LL = LL
     config%n2leg = 0
@@ -84,16 +84,16 @@ subroutine init_SSEconfig_hostart( n_sites, LL, config, &
 
     ! IMPROVE: For triangular lattice with PBC only:
     ! Assign n_plaquettes from the lattice structure S
-    config%n_plaquettes=2*n_sites
+    config%n_plaquettes=S%Nbravais_sites
 
     allocate(opstring(LL))
     do ip=1, LL
         opstring(ip)%i = 0; opstring(ip)%j = 0; opstring(ip)%k = 0
     enddo 
-    allocate( spins(n_sites) )
+    allocate( spins(S%Nsites) )
     
     ! hot start 
-    do ir = 1, n_sites
+    do ir = 1, S%Nsites
         call random_number(prob)
         if( prob < 0.5 ) then 
             spins(ir) = -1
@@ -198,17 +198,21 @@ program ssetfi
         stop
     endif 
 
-    if(lattice_type == "triangular") then         
+    if (trim(lattice_type) == "triangular") then         
         call init_lattice_triangular(nx=nx, ny=ny, &
             S=S, neigh=neigh, sublattice=sublattice, plaquettes=plaquettes) 
-        if (S%Nsites /= n_sites) then 
-            print*, "Error: S%Nsites /= n_sites"
-            stop
-        endif
-    else
+    elseif (trim(lattice_type) == "kagome") then 
+        call init_lattice_kagome(nx=nx, ny=ny, &
+            S=S, neigh=neigh, sublattice=sublattice, plaquettes=plaquettes) 
+    else 
         print*, "Error: unknown lattice type"
         stop
     endif 
+    if (S%Nsites /= n_sites) then 
+        print*, "Error: S%Nsites /= n_sites. Please check the lattice type."
+        stop
+    endif
+
 
     ! Specify interactions beyond nearest neighbours 
     ! Nearest neighbour interactions are already taken care 
@@ -297,11 +301,11 @@ program ssetfi
 
     ! Precompute the probability tables from which diagonal operators 
     ! will be sampled. 
-    call init_probtables( J_interaction_matrix=J_interaction_matrix, &
+    call init_probtables( S=S, J_interaction_matrix=J_interaction_matrix, &
         hx=hx, probtable=probtable, Jij_sign=Jij_sign, J_1=J_1, &
         n_plaquettes=size(plaquettes,dim=1), TRANSLAT_INV=.FALSE.)
 
-    call init_SSEconfig_hostart( n_sites=nx*ny, LL=10, config=config, &
+    call init_SSEconfig_hostart( S=S, LL=10, config=config, &
         opstring=opstring, spins=spins, vertexlink=vertexlink, leg_visited=leg_visited )
 
     do it = 1, ntherm_step    
