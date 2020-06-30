@@ -53,18 +53,18 @@
 ! ========================================================
 &SIMPARAMS
 J_1 		= 1.0  ! +1.0
-hx  		= 0.1  ! hx > 0 required
+hx  		= 1.0  ! hx > 0 required
 temp 		= 0.1
 nx   		= 3
 ny   		= 3
-n_sites 	= 9
-lattice_type = "triangular"
+n_sites 	= 27
+lattice_type = "kagome"
 ignore_Jmatrix = T
-Jmatrix_file = "Jmatrix_kagome2x2_FM.dat"  !"Jmatrix_nnFM.dat" 
-ntherm_step = 10000
-nmeas_step  = 10000
+Jmatrix_file = "Jmatrix_nnFM.dat" !"Jmatrix_kagome2x2_FM.dat"  !"Jmatrix_nnFM.dat" 
+ntherm_step = 1000
+nmeas_step  = 1000
 Nbin        = 10
-paramscan   = "paramscan_T"
+paramscan   = "parampoint"
 scan_min    = 0.1
 scan_max    = 10.0
 deterministic = T

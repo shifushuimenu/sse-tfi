@@ -34,8 +34,9 @@ module measurements
 
     type Phys
         ! Monte Carlo measurements 
-        integer :: Nbin       ! number of bins 
+        integer :: Nbin         ! number of bins 
         integer :: Nscalar_prop ! total number of scalar measured properties
+        integer :: Narray_prop  ! total number of elements of all array-like properties 
         integer :: avg        ! avg = Nbin + 1
         integer :: err        ! err = Nbin + 2 
 
@@ -110,6 +111,7 @@ module measurements
     
     ! heavy use
     call momentum_grid_triangular_Bravais(S=S, Kgrid=Kgrid)
+
     call init_MatsuGrid(beta=beta, MatsuGrid=MatsuGrid)
     P0%Nq = Kgrid%Nq
     P0%N_Matsubara = MatsuGrid%N_Matsubara
@@ -119,7 +121,9 @@ module measurements
     array_sizes(ISFA0) = P0%Nq
     array_sizes(ISFAM) = P0%N_Matsubara * P0%Nq  
 
-    n = P0%Nscalar_prop + sum(array_sizes(1:narrays))
+    P0%Narray_prop = sum(array_sizes(1:narrays))
+
+    n = P0%Nscalar_prop + P0%Narray_prop
     allocate(P0%AllProp(n, P0%err))
 
     ! Pointer to beginning of each array 
@@ -169,8 +173,9 @@ module measurements
     endif 
     factor = ONE / P0%cnt 
 
-    ! average 
+    ! Average scalar and array-like quantities
     P0%meas(:, idx) = P0%meas(:, idx) * factor 
+    P0%AzBzq_Matsu(:, idx) = P0%AzBzq_Matsu(:, idx) * factor
 
     ! Advance bin
     P0%idx = P0%idx + 1
@@ -208,12 +213,19 @@ module measurements
 
     if (nproc == 1) then 
         
-        ! Average scalar quantities 
+        ! Error of  scalar quantities 
         do i = 1, P0%Nscalar_prop
             data = P0%meas(i, 1:n)
             call JackKnife(n, P0%meas(i, avg), P0%meas(i, err), data, &
                 y, sgn, sum_sgn)
         enddo
+
+        ! Error of array-like quantitites 
+        do i = 1, P0%Narray_prop
+            data = P0%AllProp(i, 1:n)
+            call JackKnife(n, P0%AllProp(i, avg), P0%AllProp(i, err), data, &
+             y, sgn, sum_sgn )
+        enddo 
 
     else
 
@@ -248,7 +260,7 @@ module measurements
         real(dp) :: COparam                      ! absolute value of the clock order parameter
         complex(dp) :: COphase(3)                ! sublattice phase factors for clock order parameter
         real(dp) :: magnz_tmp
-        integer :: tmp, idx 
+        integer :: tmp_idx, idx 
         integer :: ip, ir, m, q, i1, i2, LL, Nsites
         integer :: spins_tmp(config%N_sites)
         integer :: l_nochange 
@@ -261,8 +273,8 @@ module measurements
         ! ... Executable ...
 
         idx = P0%idx
-        tmp = P0%avg    ! use the bin which is designed for averages as a temporary storage
-                        ! to avoid introducing new variables, e.g. energy, magnetization etc. 
+        tmp_idx = P0%avg    ! use the bin which is designed for averages as a temporary storage
+                            ! to avoid introducing new variables, e.g. energy, magnetization etc. 
 
         LL = config%LL
         Nsites = config%N_sites
@@ -316,28 +328,31 @@ module measurements
 
         COparam = COparam * 3.0_dp / float(Nsites)
 
-        ! open(100, file='TS.dat', position='append', status='unknown')
-        ! write(100, *) energy, magnz, magnz2, spins2binrep(spins), COparam
-        ! close(100)    
-
-        P0%meas(P0_ENERGY, tmp) = energy
-        P0%meas(P0_MAGNETIZATION, tmp) = magnz2
-        P0%meas(P0_COPARAM, tmp) = COparam
+        P0%meas(P0_ENERGY, tmp_idx) = energy
+        P0%meas(P0_MAGNETIZATION, tmp_idx) = magnz2
+        P0%meas(P0_COPARAM, tmp_idx) = COparam
 
         ! Accumulate result to P0(:, idx)
-        P0%meas(:, idx) = P0%meas(:, idx) + P0%meas(:, tmp)
-        P0%cnt = P0%cnt + 1 
+        P0%meas(:, idx) = P0%meas(:, idx) + P0%meas(:, tmp_idx)
 
-        ! ! heavy use
-        ! call measure_SzSzTimeCorr(Matsu=MatsuGrid, Kgrid=Kgrid, config=config, S=S, &
-        !     opstring=opstring, spins=spins, beta=beta, chiqAzBz=AzBzq_temp)
-        ! open(100, file="Sqz_matsu.dat", position="append", status="unknown")
-        !     do m = 1, MatsuGrid%N_Matsubara
-        !         write(100, *) MatsuGrid%im_Matsubara(m), ( real(AzBzq_temp(m, q)), q=1, Kgrid%Nq )
-        !     enddo 
-        !     write(100, *)
-        !     write(100, *)
-        ! close(100)
+
+        ! open(100, file='TS.dat', position='append', status='unknown')
+        ! write(100, *) energy, magnz, magnz2, spins2binrep(spins), COparam
+        ! close(100)   
+
+        ! ===========
+        ! heavy use
+        ! ===========
+        call measure_SzSzTimeCorr(Matsu=MatsuGrid, Kgrid=Kgrid, config=config, S=S, &
+            opstring=opstring, spins=spins, beta=beta, chiqAzBz=AzBzq_temp)
+        
+        ! Flatten the array (and transpose). The index of the flattened array runs for each momentum point
+        ! over all Matsubara indices. This convention must be remembered when outputting the array. 
+        P0%AzBzq_Matsu(:, tmp_idx) = reshape(source=real(transpose(AzBzq_temp)), shape=(/ size(AzBzq_temp) /))
+        ! accumulate result 
+        P0%AzBzq_Matsu(:, idx) = P0%AzBzq_Matsu(:, idx) + P0%AzBzq_Matsu(:, tmp_idx)
+
+        P0%cnt = P0%cnt + 1 
 
     end subroutine Phys_Measure
 

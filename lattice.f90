@@ -138,8 +138,8 @@ SUBROUTINE init_lattice_triangular( &
   
  ! Reciprocal lattice of the Bravais lattice is also triangular.                    
  ! delta_k in direction of the unit vectors of the reciprocal lattice
- S%b1_p(1) = 2.d0*PI; S%b1_p(2) = -2.d0*PI / sqrt(3.d0)
- S%b2_p(1) = 0.0;     S%b2_p(2) = 4.d0*PI / sqrt(3.d0)
+ S%b1_p(1) = 1.d0*PI; S%b1_p(2) = -1.d0*PI / sqrt(3.d0)
+ S%b2_p(1) = 0.0;     S%b2_p(2) = 2.d0*PI / sqrt(3.d0)
 
  ! Basis is just one site for triangular lattice 
  S%r_p(1,:) = 0.d0
@@ -838,7 +838,7 @@ subroutine momentum_grid_triangular_Bravais(S, Kgrid)
   if( ik /= Nq ) then
       stop " Error: nk /= Nq"
   end if
- 
+
 
   ! IMPROVE: listB(:,:) appears also as local variable in the subroutine 
   ! init_lattice_kagome. THIS CAN BE A SOURCE OF INCONSISTENCY !

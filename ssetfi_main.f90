@@ -369,6 +369,16 @@ program ssetfi
                 ( P0%meas(obs, P0%avg), P0%meas(obs, P0%err), obs = 1, P0%Nscalar_prop )
     close(500)
 
+    open(100, file="Sqz_matsu"//chr_rank//".dat", position="append", status="unknown")
+    print*, "shape(P0%AzBzq_Matsu)=", shape(P0%AzBzq_Matsu)
+    do m = 1, MatsuGrid%N_Matsubara - 1  ! WHY -1, otherwise array index exceeds bound => correct ! 
+        write(100, *) MatsuGrid%im_Matsubara(m), ( P0%AzBzq_Matsu((m-1)*Kgrid%Nq + q, P0%avg), &
+        P0%AzBzq_Matsu((m-1)*Kgrid%Nq + q, P0%err), q=1, Kgrid%Nq )
+    enddo 
+    write(100, *)
+    write(100, *)
+    close(100)
+
     if( MPI_rank == root_rank) then 
         open(700, file="output.txt", status="unknown", action="write")
         write(700, *) "The columns in the file averageXXXXX.dat have the following meaning:"
