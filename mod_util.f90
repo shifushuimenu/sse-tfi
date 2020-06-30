@@ -2,7 +2,10 @@ module util
     use types 
     implicit none 
 
+    real(dp), parameter :: PI = dacos(-1.d0)
+
     contains 
+    
 
 function spins2binrep(spins) result(binrep_integer)
 !

@@ -16,7 +16,8 @@ ssetfi_objects =  class_Stack.o \
 	      ssetfi_globals.o \
 		  test_helper.o \
 		  quantum_cluster_update_plaquette.o \
-		  measurements.o
+		  quicksort.o tau_embedding.o \
+		  measurements.o \
 	  
 	
 objects = ${modules} ${ssetfi_objects}	  

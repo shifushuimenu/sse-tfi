@@ -117,6 +117,7 @@ program ssetfi
     use ssetfi_main
     use MPI_parallel
     use util, only: init_RNG
+    use tau_embedding 
     implicit none 
 
     ! ****************************************
@@ -137,13 +138,23 @@ program ssetfi
     character(len=12) :: paramscan
     real(dp) :: scan_min = 0.0, scan_max = 0.0
     logical :: deterministic = .FALSE.
+
+    ! Imaginary time correlations 
+    type(t_MatsuGrid)  :: MatsuGrid
+
+    ! REMOVE TEMPORARY OBSERVABLES 
+    complex(dp), allocatable :: chiqAzBz(:,:)
+    real(dp), allocatable :: SxSxTimeCorr(:)
+    ! REMOVE TEMPORARY OBSERVABLES 
+
     ! ***********************************************
 
     type(Phys) :: P0
     type(Struct) :: S
+    type(t_Kgrid) :: Kgrid
 
     integer ::  ir, jr, k, i
-    integer :: it, im 
+    integer :: iit, iim, m, q
     integer :: obs
     integer :: ioerr 
 
@@ -163,6 +174,7 @@ program ssetfi
     MPI_size = 1
 #endif 
     write(chr_rank, "(i5.5)") MPI_rank
+
 
     OPEN( UNIT=5, FILE='simparams.in', ACTION="read", STATUS="old", IOSTAT=ioerr)
     IF( ioerr /=0 ) STOP "File simparams.in could not be opened."
@@ -314,7 +326,7 @@ program ssetfi
     call init_SSEconfig_hostart( S=S, LL=10, config=config, &
         opstring=opstring, spins=spins, vertexlink=vertexlink, leg_visited=leg_visited )
 
-    do it = 1, ntherm_step    
+    do iit = 1, ntherm_step    
         call one_MCS_plaquette( beta=beta, Jij_sign=Jij_sign, spins=spins, &
             opstring=opstring, config=config, probtable=probtable, &
             plaquettes=plaquettes, vertexlink=vertexlink, &
@@ -327,16 +339,17 @@ program ssetfi
         endif 
     enddo
 
-    call Phys_Init(P0, S, beta, Nbin)
+    call Phys_Init(P0=P0, S=S, Kgrid=Kgrid, MatsuGrid=MatsuGrid, beta=beta, Nbin=Nbin)
 
-    do im = 1, nmeas_step
+    do iim = 1, nmeas_step
         call one_MCS_plaquette( beta=beta, Jij_sign=Jij_sign, spins=spins, &
             opstring=opstring, config=config, probtable=probtable, &
             plaquettes=plaquettes, vertexlink=vertexlink, &
             leg_visited=leg_visited )
-        call Phys_Measure(P0, config, spins, opstring, beta, probtable%consts_added)
+        call Phys_Measure(P0, S, Kgrid, MatsuGrid, config, spins, opstring, &
+            beta, probtable%consts_added)
 
-        if (mod(im, nmeas_step / Nbin) == 0) then 
+        if (mod(iim, nmeas_step / Nbin) == 0) then 
             call Phys_Avg(P0)
         endif 
     enddo

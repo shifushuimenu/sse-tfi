@@ -1,11 +1,11 @@
 ! TODO:
 !  - Error routines are taken from QUEST code.
-!  - Define Struct S (lattice structure)
 
 module measurements
     use types 
     use SSE_configuration 
-    use lattice, only: Struct 
+    use lattice, only: Struct, t_Kgrid, momentum_grid_triangular_Bravais
+    use tau_embedding
     implicit none 
 
     ! Number of array-valued properties 
@@ -14,7 +14,7 @@ module measurements
     ! Index of the array variables 
     integer, parameter :: IMEAS = 0  ! Scalar measurements 
     integer, parameter :: ISFA0 = 1  ! Equal-time structure factor 
-    integer, parameter :: ISFAM = 2  ! Structure factor at selected Matsubara frequencies 
+    integer, parameter :: ISFAM = 2  ! Corr. func. <Az(\tau)Bz(0)> at selected Matsubara frequencies and selected momenta
 
     integer :: array_sizes(0:narrays)
 
@@ -45,17 +45,24 @@ module measurements
         integer :: Nsites  ! number of sites 
         real(dp) :: beta   ! inverse temperature 
 
+        integer :: N_Matsubara   ! number of selected Matsubara indices for calculating dyn. corr. func.
+        integer :: Nq            ! number of selected momentum points  
+
         ! Scalar array
         real(dp), pointer :: meas(:,:)      ! scalar variables such as energy, etc.
 
         ! Indices 
         integer :: IARR(0: narrays + 1)
 
-        real(dp), pointer :: AllProp(:,:)   ! array of all properties 
+        real(dp), pointer :: AllProp(:,:)   ! array of all real properties 
 
-        ! Pointers to AllProp
-        real(dp), pointer :: Szq(:,:)         ! Equal-time structure factor 
-        real(dp), pointer :: Szq_Matsu(:,:) ! Structure factor at selected Matsubara frequencies
+        ! Equal-time structure factor 
+        real(dp), pointer :: Szq(:,:)          
+        ! Corr. func. <Az(\tau)Bz(0)> at selected Matsubara frequencies and selected momenta
+        ! IMPROVE: Theoretically, this correlation function is complex, but ultimately only 
+        ! the real part is needed. 
+        real(dp), pointer :: AzBzq_Matsu(:,:)
+
 
         logical :: init 
         logical :: compSFA  ! whether to compute structure factor
@@ -65,18 +72,25 @@ module measurements
 
     contains 
 
-    subroutine Phys_Init(P0, S, beta, Nbin)
+    subroutine Phys_Init(P0, S, Kgrid, MatsuGrid, beta, Nbin)
     ! 
     ! Purpose:
     ! ========
     ! Initialize the measurement structure Phys.
     !
+    ! Precondition:
+    ! =============
+    !   init_MatsuGrid() and momentum_grid_triangular_Bravais() has been 
+    !   called. 
+    !        
     ! Arguments:
     ! ==========
     type(Phys), intent(inout) :: P0     ! Phys to be initialized 
     type(Struct), intent(in) :: S
     integer, intent(in) :: Nbin
     real(dp), intent(in) :: beta
+    type(t_Kgrid), intent(inout) :: Kgrid 
+    type(t_MatsuGrid), intent(inout) :: MatsuGrid
 
     ! ... Local vars ...
     integer :: i, n
@@ -93,27 +107,38 @@ module measurements
     P0%idx = 1 
 
     P0%Nscalar_prop = P0_N
+    
+    ! heavy use
+    call momentum_grid_triangular_Bravais(S=S, Kgrid=Kgrid)
+    call init_MatsuGrid(beta=beta, MatsuGrid=MatsuGrid)
+    P0%Nq = Kgrid%Nq
+    P0%N_Matsubara = MatsuGrid%N_Matsubara
 
     ! Allocate storage for properties 
     array_sizes(IMEAS) = 0               ! Scalar variables, do not modify entry 0
-    array_sizes(ISFA0) = P0%Nsites
-    array_sizes(ISFAM) = 7*P0%Nsites    !!!!! IMPROVE: put number of Matsubara frequencies
+    array_sizes(ISFA0) = P0%Nq
+    array_sizes(ISFAM) = P0%N_Matsubara * P0%Nq  
 
     n = P0%Nscalar_prop + sum(array_sizes(1:narrays))
     allocate(P0%AllProp(n, P0%err))
 
     ! Pointer to beginning of each array 
     P0%IARR(IMEAS) = 1
+    ! do i = 1, narrays + 1
+        ! P0%IARR(i) = P0%Nscalar_prop + 1 + (i - 1) * array_sizes(i - 1)
+    ! enddo
     do i = 1, narrays + 1
-        P0%IARR(i) = P0%Nscalar_prop + 1 + (i - 1) * array_sizes(i - 1)
+        P0%IARR(i) = P0%Nscalar_prop + 1 + array_sizes(i - 1)
     enddo
 
     P0%meas => P0%AllProp(P0%IARR(IMEAS):P0%IARR(IMEAS + 1) - 1, :)
     P0%Szq  => P0%AllProp(P0%IARR(ISFA0):P0%IARR(ISFA0 + 1) - 1, :)
+    P0%AzBzq_Matsu => P0%AllProp(P0%IARR(ISFAM):P0%IARR(ISFAM + 1) - 1, :)
 
     ! Initialize
     P0%meas = ZERO
     P0%Szq  = ZERO
+    P0%AzBzq_Matsu = ZERO
 
     P0%init = .true.
 
@@ -132,7 +157,7 @@ module measurements
 
     ! ... local scalar ...
     real(dp) :: factor 
-    integer :: idx, n 
+    integer :: idx
 
     ! ... Executable ...
     idx = P0%idx 
@@ -201,12 +226,16 @@ module measurements
     ! end subroutine 
 
 
-    subroutine Phys_Measure(P0, config, spins, opstring, beta, consts_added)
+    subroutine Phys_Measure(P0, S, Kgrid, MatsuGrid, config, spins, opstring, &
+                beta, consts_added)
         use util, only: spins2binrep
         use ssetfi_globals, only: sublattice 
         ! Arguments:
         ! ==========
         type(Phys), intent(inout) :: P0
+        type(Struct), intent(in) :: S
+        type(t_Kgrid), intent(in) :: Kgrid
+        type(t_MatsuGrid), intent(in) :: MatsuGrid
         type(t_Config) :: config 
         integer, intent(in) :: spins(:)
         type(t_BondOperator), intent(in) :: opstring(:)
@@ -220,10 +249,14 @@ module measurements
         complex(dp) :: COphase(3)                ! sublattice phase factors for clock order parameter
         real(dp) :: magnz_tmp
         integer :: tmp, idx 
-        integer :: ip, ir, i1, i2, LL, Nsites
+        integer :: ip, ir, m, q, i1, i2, LL, Nsites
         integer :: spins_tmp(config%N_sites)
         integer :: l_nochange 
         real(dp) :: factor 
+
+        ! temporary help variable => REMOVE later 
+        complex(dp), allocatable  :: AzBzq_temp(:,:)
+        if (.not.allocated(AzBzq_temp)) allocate( AzBzq_temp(MatsuGrid%N_Matsubara, Kgrid%Nq) ) 
 
         ! ... Executable ...
 
@@ -283,9 +316,9 @@ module measurements
 
         COparam = COparam * 3.0_dp / float(Nsites)
 
-        open(100, file='TS.dat', position='append', status='unknown')
-        write(100, *) energy, magnz, magnz2, spins2binrep(spins), COparam
-        close(100)    
+        ! open(100, file='TS.dat', position='append', status='unknown')
+        ! write(100, *) energy, magnz, magnz2, spins2binrep(spins), COparam
+        ! close(100)    
 
         P0%meas(P0_ENERGY, tmp) = energy
         P0%meas(P0_MAGNETIZATION, tmp) = magnz2
@@ -294,6 +327,17 @@ module measurements
         ! Accumulate result to P0(:, idx)
         P0%meas(:, idx) = P0%meas(:, idx) + P0%meas(:, tmp)
         P0%cnt = P0%cnt + 1 
+
+        ! ! heavy use
+        ! call measure_SzSzTimeCorr(Matsu=MatsuGrid, Kgrid=Kgrid, config=config, S=S, &
+        !     opstring=opstring, spins=spins, beta=beta, chiqAzBz=AzBzq_temp)
+        ! open(100, file="Sqz_matsu.dat", position="append", status="unknown")
+        !     do m = 1, MatsuGrid%N_Matsubara
+        !         write(100, *) MatsuGrid%im_Matsubara(m), ( real(AzBzq_temp(m, q)), q=1, Kgrid%Nq )
+        !     enddo 
+        !     write(100, *)
+        !     write(100, *)
+        ! close(100)
 
     end subroutine Phys_Measure
 
