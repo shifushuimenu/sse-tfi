@@ -37,7 +37,7 @@ subroutine measure_SzSzTimeCorr(Matsu, Kgrid, config, S, &
 !    Michel and Evertz, arXiv:0705.0799v2.
 !
 ! Furthermore, compute the auxiliary correlation function <Sx(l*dtau)Sx(0)> .
-! For an explanation of the method see 
+! For an explanation of this method see:
 !
 ! Reference:    
 ! ~~~~~~~~~~    
@@ -56,6 +56,8 @@ subroutine measure_SzSzTimeCorr(Matsu, Kgrid, config, S, &
 !           the correlation functions are to be computed. 
 !   config: SSE configuration struct object
 !   S:      Lattice struture object 
+!   chiqAzBz: The imaginary-time correlation function for selected Matsubara
+!             frequencies and selected momentum points.
 use SSE_configuration
 use lattice, only: Struct, t_Kgrid
 use mod_sort, only: quicksort
@@ -221,33 +223,33 @@ do ip=1,LL
     ! This sum is only over non-trivial propagation steps where a 
     ! spin-flip operator sits. 
 
-	if (itau_Sx.eq.0) then
+    if (itau_Sx.eq.0) then
         ! first interval of the Riemann sum [0, tau_first] where tau_first
         ! is the first spin-flip operator acting on site ir
-            tau_p1 = 0.d0
-        else
-            tau_p1 = tau_values_of_Sx(itau_Sx,ir)
-            spins2(ir) = -spins2(ir) ! get the right spin state of the imaginary time segment
-        endif
-
-        if (itau_Sx.ne.counter(ir)) then
-	    tau_p2 = tau_values_of_Sx(itau_Sx+1,ir)
+        tau_p1 = 0.d0
     else
-	    ! last interval of the Riemann sum [tau_last, beta] where tau_last
-        ! is the last spin-flip operator acting on site ir
-	    tau_p2 = beta
+        tau_p1 = tau_values_of_Sx(itau_Sx,ir)
+        spins2(ir) = -spins2(ir) ! get the right spin state of the imaginary time segment
     endif
 
-	 ! Matsubara frequency omega_m = 0
-	 Asum(1,ir) = Asum(1,ir) +  spins2(ir)*(tau_p2 - tau_p1)
-	 Bsum(1,ir) = Bsum(1,ir) +  spins2(ir)*(tau_p2 - tau_p1)
-     ! The other Matsubara frequencies ...
-	 do im=1,N_Matsubara-1 ! Fortran indices start at 1
-	    Asum(im+1,ir) = Asum(im+1,ir) + spins2(ir)*( exp(cmplx(0.0_dp, -2*PI*Matsu%im_Matsubara(im+1)*tau_p2/beta, kind=dp)) - &
+    if (itau_Sx.ne.counter(ir)) then
+        tau_p2 = tau_values_of_Sx(itau_Sx+1,ir)
+    else
+	      ! last interval of the Riemann sum [tau_last, beta] where tau_last
+        ! is the last spin-flip operator acting on site ir
+        tau_p2 = beta
+    endif
+
+    ! Matsubara frequency omega_m = 0
+    Asum(1,ir) = Asum(1,ir) +  spins2(ir)*(tau_p2 - tau_p1)
+    Bsum(1,ir) = Bsum(1,ir) +  spins2(ir)*(tau_p2 - tau_p1)
+    ! The other Matsubara frequencies ...
+    do im=1,N_Matsubara-1 ! Fortran indices start at 1
+      Asum(im+1,ir) = Asum(im+1,ir) + spins2(ir)*( exp(cmplx(0.0_dp, -2*PI*Matsu%im_Matsubara(im+1)*tau_p2/beta, kind=dp)) - &
                         exp(cmplx(0.0_dp, -2*PI*Matsu%im_Matsubara(im+1)*tau_p1/beta, kind=dp)) )
-	    Bsum(im+1,ir) = Bsum(im+1,ir) + spins2(ir)*( exp(cmplx(0.0_dp, 2*PI*Matsu%im_Matsubara(im+1)*tau_p2/beta, kind=dp)) - &
-	     	 			exp(cmplx(0.0_dp, 2*PI*Matsu%im_Matsubara(im+1)*tau_p1/beta, kind=dp)) )
-     enddo
+      Bsum(im+1,ir) = Bsum(im+1,ir) + spins2(ir)*( exp(cmplx(0.0_dp, 2*PI*Matsu%im_Matsubara(im+1)*tau_p2/beta, kind=dp)) - &
+                        exp(cmplx(0.0_dp, 2*PI*Matsu%im_Matsubara(im+1)*tau_p1/beta, kind=dp)) )
+    enddo
      
  enddo
  enddo
@@ -289,12 +291,12 @@ chiqAzBz(:,:) = chiqAzBz(:,:) / float(n)
   do ir=1,n ! for each site
     do itau1=1,counter(ir)
       do itau2=itau1+1,counter(ir)
-	     tau_dist = abs( tau_values_of_Sx(itau2,ir) - tau_values_of_Sx(itau1,ir) )
-	     lPos = int(tau_dist/dtau)+1
-	     N_SxSx(ir,lPos) = N_SxSx(ir,lPos) + 1 ! number of pairs (Sx(tau1),Sx(tau2)) of Sx operators in the operator string at site ir where one operator acts
-					  ! lPos time intervals later than the other one
-	     lPos = L_tau - int(tau_dist/dtau) ! count the same pair of operators again, but this time the distance between them wraps around imaginary time.
-	     N_SxSx(ir,lPos) = N_SxSx(ir,lPos) + 1
+        tau_dist = abs( tau_values_of_Sx(itau2,ir) - tau_values_of_Sx(itau1,ir) )
+        lPos = int(tau_dist/dtau)+1
+        N_SxSx(ir,lPos) = N_SxSx(ir,lPos) + 1 ! number of pairs (Sx(tau1),Sx(tau2)) of Sx operators in the operator string at site ir where one operator acts
+            ! lPos time intervals later than the other one
+        lPos = L_tau - int(tau_dist/dtau) ! count the same pair of operators again, but this time the distance between them wraps around imaginary time.
+        N_SxSx(ir,lPos) = N_SxSx(ir,lPos) + 1
       enddo
     enddo
   enddo
