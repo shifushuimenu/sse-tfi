@@ -1,6 +1,6 @@
 !-------------------------!
 module mod_sort
-!---------------------!
+!-------------------------!
 ! Recursive Fortran 95 quicksort routine
 ! sorts real numbers into ascending numerical order
 ! Author: Juli Rew, SCD Consulting (juliana@ucar.edu), 9/03

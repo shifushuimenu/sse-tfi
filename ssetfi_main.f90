@@ -360,7 +360,9 @@ program ssetfi
     print*, hx, temp, &
             P0%meas(P0_ENERGY, P0%avg), P0%meas(P0_ENERGY, P0%err), &
             P0%meas(P0_MAGNETIZATION, P0%avg), P0%meas(P0_MAGNETIZATION, P0%err), &
-            P0%meas(P0_COPARAM, P0%avg), P0%meas(P0_COPARAM, P0%err)
+            P0%meas(P0_COPARAM, P0%avg), P0%meas(P0_COPARAM, P0%err), &
+            P0%meas(P0_SPECIFIC_HEAT, P0%avg), P0%meas(P0_SPECIFIC_HEAT, P0%err)
+                        
     open(500, file='averages'//chr_rank//'.dat', position='append', status='unknown')
     write(500, *) hx, temp, &
                 !   P0%meas(P0_ENERGY, P0%avg), P0%meas(P0_ENERGY, P0%err), &

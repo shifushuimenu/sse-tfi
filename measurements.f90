@@ -22,15 +22,21 @@ module measurements
     integer, parameter :: P0_ENERGY = 1
     integer, parameter :: P0_MAGNETIZATION = 2   ! uniform magnetization per site 
     integer, parameter :: P0_COPARAM = 3         ! Clock-order parameter (triangular lattice)
+    integer, parameter :: P0_AV_NEXP = 4         ! average expansion order 
+    integer, parameter :: P0_AV_NEXP2 = 5        ! average expansion order squared 
+    integer, parameter :: P0_SPECIFIC_HEAT = 6   ! specific heat per site 
 
     ! Total number of scalar variables 
-    integer, parameter :: P0_N = 3
+    integer, parameter :: P0_N = 6
 
     ! Name of scalar variables 
     character(len=*), parameter :: P0_STR(P0_N) = (/&
-        "          Energy :               ", &
+        "          Energy (per site):     ", &
         "          Magnetization :        ", &
-        "          Clock order parameter: "/)
+        "          Clock order parameter: ", &
+        "          av. n_exp:             ", &
+        "          av. n_exp sqaured:     ", &
+        "       specific heat (per site): "/)
 
     type Phys
         ! Monte Carlo measurements 
@@ -177,6 +183,10 @@ module measurements
     P0%meas(:, idx) = P0%meas(:, idx) * factor 
     P0%AzBzq_Matsu(:, idx) = P0%AzBzq_Matsu(:, idx) * factor
 
+    ! Compute fluctuation-dissipation quantity per bin
+    P0%meas(P0_SPECIFIC_HEAT, idx) = ( P0%meas(P0_AV_NEXP2, idx) - P0%meas(P0_AV_NEXP, idx)**2 &
+                                     - P0%meas(P0_AV_NEXP, idx) ) / P0%Nsites
+
     ! Advance bin
     P0%idx = P0%idx + 1
 
@@ -281,6 +291,7 @@ module measurements
 
         energy = (- config%n_exp / beta + consts_added) / float(Nsites)
 
+
         spins_tmp(:) = spins(:)
         l_nochange = 0
         factor = ONE / float(LL)
@@ -331,6 +342,11 @@ module measurements
         P0%meas(P0_ENERGY, tmp_idx) = energy
         P0%meas(P0_MAGNETIZATION, tmp_idx) = magnz2
         P0%meas(P0_COPARAM, tmp_idx) = COparam
+        P0%meas(P0_AV_NEXP, tmp_idx) = config%n_exp
+        P0%meas(P0_AV_NEXP2, tmp_idx) = config%n_exp**2
+        ! fluctuation-dissipation quantities are only defined *over* a bin,
+        ! no in a single configuration 
+        P0%meas(P0_SPECIFIC_HEAT, tmp_idx) = 0.0_dp   
 
         ! Accumulate result to P0(:, idx)
         P0%meas(:, idx) = P0%meas(:, idx) + P0%meas(:, tmp_idx)
@@ -340,17 +356,19 @@ module measurements
         ! write(100, *) energy, magnz, magnz2, spins2binrep(spins), COparam
         ! close(100)   
 
-        ! ===========
-        ! heavy use
-        ! ===========
-        call measure_SzSzTimeCorr(Matsu=MatsuGrid, Kgrid=Kgrid, config=config, S=S, &
-            opstring=opstring, spins=spins, beta=beta, chiqAzBz=AzBzq_temp)
+        ! ! ===========
+        ! ! heavy use
+        ! ! ===========
+        ! call measure_SzSzTimeCorr(Matsu=MatsuGrid, Kgrid=Kgrid, config=config, S=S, &
+        !     opstring=opstring, spins=spins, beta=beta, chiqAzBz=AzBzq_temp)
         
-        ! Flatten the array (and transpose). The index of the flattened array runs for each momentum point
-        ! over all Matsubara indices. This convention must be remembered when outputting the array. 
-        P0%AzBzq_Matsu(:, tmp_idx) = reshape(source=real(transpose(AzBzq_temp)), shape=(/ size(AzBzq_temp) /))
-        ! accumulate result 
-        P0%AzBzq_Matsu(:, idx) = P0%AzBzq_Matsu(:, idx) + P0%AzBzq_Matsu(:, tmp_idx)
+        ! ! Flatten the array (and transpose). The index of the flattened array runs for each momentum point
+        ! ! over all Matsubara indices. This convention must be remembered when outputting the array. 
+        ! P0%AzBzq_Matsu(:, tmp_idx) = reshape(source=real(transpose(AzBzq_temp)), shape=(/ size(AzBzq_temp) /))
+        ! ! accumulate result 
+        ! P0%AzBzq_Matsu(:, idx) = P0%AzBzq_Matsu(:, idx) + P0%AzBzq_Matsu(:, tmp_idx)
+
+
 
         P0%cnt = P0%cnt + 1 
 

@@ -123,8 +123,11 @@ n2leg = config%n2leg
 
 if (.not.allocated(SxSxTimeCorr)) allocate(SxSxTimeCorr(L_tau))
 
-allocate(tau_values_of_Sx(1:max(10,4*int(n2leg/n)), n)) ! It is assumed that there are not more than 4*int(n2leg/NN) spin-flip operators sitting on one site.
-! N_SxSx(:,:) is number of pairs (Sx(tau1),Sx(tau2)) of Sx operators in the operator string at site ir where one operator acts
+! It is assumed that there are not more than 4*int(n2leg/NN) spin-flip operators sitting on one site.
+! IMPROVE: This array should be reallocated if its bounds are exceeded. 
+allocate(tau_values_of_Sx(1:max(10,4*int(n2leg/n)), n)) 
+! N_SxSx(:,:) is number of pairs (Sx(tau1),Sx(tau2)) of Sx operators in the
+!  operator string at site ir where one operator acts
 ! lPos time intervals later than the other one
 allocate(N_SxSx(n, L_tau))  
 
@@ -256,18 +259,7 @@ do ip=1,LL
  
 ! Spatial cosine (C) and sine (S) Fourier transformation
 ! IMPROVE: Replace by discrete Fourier transform in real space
-CA(:,:)=cmplx(0.d0, 0.d0, kind=dp); CB(:,:)=cmplx(0.d0, 0.d0, kind=dp)
-SA(:,:)=cmplx(0.d0, 0.d0, kind=dp); SB(:,:)=cmplx(0.d0, 0.d0, kind=dp)
-do q=1,Nq
-  do ir=1,n   
-    do im=1, N_Matsubara
-      CA(im,q)=CA(im,q)+Kgrid%cosqr(ir,q)*Asum(im,ir)
-      CB(im,q)=CB(im,q)+Kgrid%cosqr(ir,q)*Bsum(im,ir)
-      SA(im,q)=SA(im,q)+Kgrid%sinqr(ir,q)*Asum(im,ir)
-      SB(im,q)=SB(im,q)+Kgrid%sinqr(ir,q)*Bsum(im,ir)      
-    enddo
-  enddo
-enddo  
+ call DCSFT(Kgrid=Kgrid, Asum=Asum, Bsum=Bsum, CA=CA, CB=CB, SA=SA, SB=SB)
 
 ! Spin-spin correlation function in Matsubara and momentum space. 
 do q=1,Nq
@@ -349,5 +341,58 @@ subroutine init_MatsuGrid(beta, MatsuGrid)
     MatsuGrid%dtau = beta / float(MatsuGrid%L_tau) ! spacing of the imaginary time grid
 
 end subroutine init_MatsuGrid    
+
+
+subroutine DCSFT(Kgrid, Asum, Bsum, CA, CB, SA, SB)
+  ! Discrete cosine/sine Fourier transformation 
+  !  
+  ! NOTE: This routine should only be used if there is a small
+  ! number of selected  momentum-points.
+  ! For computing the Fourier transform at all momentum points 
+  ! a 2D fast Fourier transform shuold be employed instead
+  ! (to reduce the scaling with the number of lattice sites `n`
+  ! from n^2 to n*log(n)).
+  ! see: https://bones.swmed.edu/crystaFFT.html
+  !
+  ! Arguments:
+  ! ----------
+  use lattice, only: t_Kgrid
+  implicit none 
+  type(t_Kgrid), intent(in) :: Kgrid 
+  complex(dp), intent(in) :: Asum(:,:)
+  complex(dp), intent(in) :: Bsum(:,:)
+  complex(dp), intent(out) :: CA(:,:), CB(:,:), SA(:,:), SB(:,:)
+
+  ! ... Local variables ...
+  integer :: q, ir, im 
+  integer :: n, N_Matsubara, Nq
+  integer :: arr(2)
+
+  if (any((shape(Asum)/=shape(Bsum)).or.(shape(CA)/=shape(CB)) &
+    .or.(shape(SA)/=shape(SB)).or.(shape(Asum)/=shape(CA)).or.(shape(CA)/=shape(SA)))) then 
+      print*, "ERROR: DCSFT: incompatible shapes of input arrays"
+      stop
+  endif   
+
+  ! Number of selected momentum points 
+  Nq = Kgrid%Nq
+  arr = shape(Asum); N_Matsubara = arr(1); n = arr(2)
+
+! Spatial cosine (C) and sine (S) Fourier transformation
+! IMPROVE: Replace by discrete Fourier transform in real space
+  CA(:,:)=cmplx(0.d0, 0.d0, kind=dp); CB(:,:)=cmplx(0.d0, 0.d0, kind=dp)
+  SA(:,:)=cmplx(0.d0, 0.d0, kind=dp); SB(:,:)=cmplx(0.d0, 0.d0, kind=dp)
+  do q=1,Nq
+    do ir=1,n   
+      do im=1, N_Matsubara
+        CA(im,q)=CA(im,q)+Kgrid%cosqr(ir,q)*Asum(im,ir)
+        CB(im,q)=CB(im,q)+Kgrid%cosqr(ir,q)*Bsum(im,ir)
+        SA(im,q)=SA(im,q)+Kgrid%sinqr(ir,q)*Asum(im,ir)
+        SB(im,q)=SB(im,q)+Kgrid%sinqr(ir,q)*Bsum(im,ir)      
+      enddo
+    enddo
+  enddo  
+
+end subroutine DCSFT
 
 end module tau_embedding 
