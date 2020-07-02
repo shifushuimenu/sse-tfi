@@ -34,8 +34,8 @@ module measurements
         "          Energy (per site):     ", &
         "          Magnetization :        ", &
         "          Clock order parameter: ", &
-        "          av. n_exp:             ", &
-        "          av. n_exp sqaured:     ", &
+        "          av. expansion order:   ", &
+        "   av. expansion order  squared: ", &
         "       specific heat (per site): "/)
 
     type Phys
@@ -124,8 +124,8 @@ module measurements
 
     ! Allocate storage for properties 
     array_sizes(IMEAS) = 0               ! Scalar variables, do not modify entry 0
-    array_sizes(ISFA0) = P0%Nq
-    array_sizes(ISFAM) = P0%N_Matsubara * P0%Nq  
+    array_sizes(ISFA0) = P0%Nq           ! equal-time structure factor 
+    array_sizes(ISFAM) = P0%N_Matsubara * P0%Nq   ! dynamical correlaction function 
 
     P0%Narray_prop = sum(array_sizes(1:narrays))
 
@@ -133,12 +133,14 @@ module measurements
     allocate(P0%AllProp(n, P0%err))
 
     ! Pointer to beginning of each array 
-    P0%IARR(IMEAS) = 1
+
     ! do i = 1, narrays + 1
         ! P0%IARR(i) = P0%Nscalar_prop + 1 + (i - 1) * array_sizes(i - 1)
     ! enddo
-    do i = 1, narrays + 1
-        P0%IARR(i) = P0%Nscalar_prop + 1 + array_sizes(i - 1)
+    P0%IARR(IMEAS) = 1
+    P0%IARR(ISFA0) = P0%Nscalar_prop + 1
+    do i = 2, narrays + 1
+        P0%IARR(i) = P0%IARR(i - 1) + array_sizes(i - 1)
     enddo
 
     P0%meas => P0%AllProp(P0%IARR(IMEAS):P0%IARR(IMEAS + 1) - 1, :)
@@ -242,10 +244,6 @@ module measurements
     endif 
 
     end subroutine Phys_GetErr
-
-    ! subroutine Phys_Print()
-
-    ! end subroutine 
 
 
     subroutine Phys_Measure(P0, S, Kgrid, MatsuGrid, config, spins, opstring, &
@@ -373,5 +371,68 @@ module measurements
         P0%cnt = P0%cnt + 1 
 
     end subroutine Phys_Measure
+
+
+    subroutine Phys_Print(P0, Kgrid, MatsuGrid, basename, hx, temp)
+        use MPI_parallel, only: MPI_rank, chr_rank, root_rank     ! global variables 
+        implicit none 
+
+        ! Arguments:
+        ! ==========
+        type(Phys), intent(in)        :: P0 
+        type(t_Kgrid), intent(in)     :: Kgrid 
+        type(t_MatsuGrid), intent(in) :: MatsuGrid 
+        character(len=*), intent(in)  :: basename 
+
+        ! IMPROVE:
+        real(dp), intent(in) :: hx, temp
+
+        ! ... Local variables ...
+        integer :: obs, m, q
+
+        ! Output (clean up !)
+        print*, hx, temp, &
+        P0%meas(P0_ENERGY, P0%avg), P0%meas(P0_ENERGY, P0%err), &
+        P0%meas(P0_MAGNETIZATION, P0%avg), P0%meas(P0_MAGNETIZATION, P0%err), &
+        P0%meas(P0_COPARAM, P0%avg), P0%meas(P0_COPARAM, P0%err), &
+        P0%meas(P0_SPECIFIC_HEAT, P0%avg), P0%meas(P0_SPECIFIC_HEAT, P0%err)
+
+        open(500, file='averages'//chr_rank//'.dat', position='append', status='unknown')
+        write(500, *) hx, temp, &
+            ( P0%meas(obs, P0%avg), P0%meas(obs, P0%err), obs = 1, P0%Nscalar_prop )
+        close(500)
+
+        ! Write out all bins of the imaginary time correlation function 
+        ! in a format which is useful for postprocessing by a code for analytical continuation.
+        ! For each momentum point write out all bins, separated by empty lines. 
+        open(100, file="Sqz_matsu"//chr_rank//".dat", position="append", status="unknown")
+        print*, "shape(P0%AzBzq_Matsu)=", shape(P0%AzBzq_Matsu)
+        do m = 1, MatsuGrid%N_Matsubara
+            write(100, *) MatsuGrid%im_Matsubara(m), ( P0%AzBzq_Matsu((m-1)*Kgrid%Nq + q, P0%avg), &
+                        P0%AzBzq_Matsu((m-1)*Kgrid%Nq + q, P0%err), q=1, Kgrid%Nq )
+        enddo 
+        write(100, *)
+        write(100, *)
+        close(100)
+
+        if( MPI_rank == root_rank) then 
+            open(700, file="output.txt", status="unknown", action="write")
+            write(700, *) "The columns in the file averageXXXXX.dat have the following meaning:"
+            write(700, *) "======================"
+            write(700, *) "Simulation parameters:"
+            write(700, *) "======================"
+            write(700, *) "transverse field        : 1"
+            write(700, *) "temperature             : 2"
+            write(700, *) "============================"
+            write(700, *) "Scalar observables: avg, err"
+            write(700, *) "============================"        
+            do obs = 1, P0%Nscalar_prop
+                write(700, *) P0_STR(obs), 2 +(obs-1)*2 + 1, 2 +(obs-1)*2 + 2
+            enddo
+            close(700)
+        endif 
+
+
+    end subroutine     
 
 end module 
