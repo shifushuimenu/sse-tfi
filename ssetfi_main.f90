@@ -356,49 +356,50 @@ program ssetfi
 
     call Phys_GetErr(P0)
 
-    ! Output (clean up !)
-    print*, hx, temp, &
-    P0%meas(P0_ENERGY, P0%avg), P0%meas(P0_ENERGY, P0%err), &
-    P0%meas(P0_MAGNETIZATION, P0%avg), P0%meas(P0_MAGNETIZATION, P0%err), &
-    P0%meas(P0_COPARAM, P0%avg), P0%meas(P0_COPARAM, P0%err), &
-    P0%meas(P0_SPECIFIC_HEAT, P0%avg), P0%meas(P0_SPECIFIC_HEAT, P0%err)
+    ! ! Output (clean up !)
+    ! print*, hx, temp, &
+    ! P0%meas(P0_ENERGY, P0%avg), P0%meas(P0_ENERGY, P0%err), &
+    ! P0%meas(P0_MAGNETIZATION, P0%avg), P0%meas(P0_MAGNETIZATION, P0%err), &
+    ! P0%meas(P0_COPARAM, P0%avg), P0%meas(P0_COPARAM, P0%err), &
+    ! P0%meas(P0_SPECIFIC_HEAT, P0%avg), P0%meas(P0_SPECIFIC_HEAT, P0%err)
 
-    open(500, file='averages'//chr_rank//'.dat', position='append', status='unknown')
-    write(500, *) hx, temp, &
-            !   P0%meas(P0_ENERGY, P0%avg), P0%meas(P0_ENERGY, P0%err), &
-            !   P0%meas(P0_MAGNETIZATION, P0%avg), P0%meas(P0_MAGNETIZATION, P0%err), &
-            !   P0%meas(P0_COPARAM, P0%avg), P0%meas(P0_COPARAM, P0%err)
-            ( P0%meas(obs, P0%avg), P0%meas(obs, P0%err), obs = 1, P0%Nscalar_prop )
-    close(500)
+    ! open(500, file='averages'//chr_rank//'.dat', position='append', status='unknown')
+    ! write(500, *) hx, temp, &
+    !         !   P0%meas(P0_ENERGY, P0%avg), P0%meas(P0_ENERGY, P0%err), &
+    !         !   P0%meas(P0_MAGNETIZATION, P0%avg), P0%meas(P0_MAGNETIZATION, P0%err), &
+    !         !   P0%meas(P0_COPARAM, P0%avg), P0%meas(P0_COPARAM, P0%err)
+    !         ( P0%meas(obs, P0%avg), P0%meas(obs, P0%err), obs = 1, P0%Nscalar_prop )
+    ! close(500)
 
-    open(100, file="Sqz_matsu"//chr_rank//".dat", position="append", status="unknown")
-    print*, "shape(P0%AzBzq_Matsu)=", shape(P0%AzBzq_Matsu)
-    print*, MatsuGrid%N_Matsubara, Kgrid%Nq, Kgrid%Nq * MatsuGrid%N_Matsubara
-    do m = 1, MatsuGrid%N_Matsubara
-    write(100, *) MatsuGrid%im_Matsubara(m), ( P0%AzBzq_Matsu((m-1)*Kgrid%Nq + q, P0%avg), &
-    P0%AzBzq_Matsu((m-1)*Kgrid%Nq + q, P0%err), q=1, Kgrid%Nq )
-    enddo 
-    write(100, *)
-    write(100, *)
-    close(100)
+    ! open(100, file="Sqz_matsu"//chr_rank//".dat", position="append", status="unknown")
+    ! print*, "shape(P0%AzBzq_Matsu)=", shape(P0%AzBzq_Matsu)
+    ! print*, MatsuGrid%N_Matsubara, Kgrid%Nq, Kgrid%Nq * MatsuGrid%N_Matsubara
+    ! do m = 1, MatsuGrid%N_Matsubara
+    ! write(100, *) MatsuGrid%im_Matsubara(m), ( P0%AzBzq_Matsu((m-1)*Kgrid%Nq + q, P0%avg), &
+    ! P0%AzBzq_Matsu((m-1)*Kgrid%Nq + q, P0%err), q=1, Kgrid%Nq )
+    ! enddo 
+    ! write(100, *)
+    ! write(100, *)
+    ! close(100)
 
-    if( MPI_rank == root_rank) then 
-    open(700, file="output.txt", status="unknown", action="write")
-    write(700, *) "The columns in the file averageXXXXX.dat have the following meaning:"
-    write(700, *) "======================"
-    write(700, *) "Simulation parameters:"
-    write(700, *) "======================"
-    write(700, *) "transverse field        : 1"
-    write(700, *) "temperature             : 2"
-    write(700, *) "============================"
-    write(700, *) "Scalar observables: avg, err"
-    write(700, *) "============================"        
-    do obs = 1, P0%Nscalar_prop
-        write(700, *) P0_STR(obs), 2 +(obs-1)*2 + 1, 2 +(obs-1)*2 + 2
-    enddo
-    close(700)
-    endif 
+    ! if( MPI_rank == root_rank) then 
+    ! open(700, file="output.txt", status="unknown", action="write")
+    ! write(700, *) "The columns in the file averageXXXXX.dat have the following meaning:"
+    ! write(700, *) "======================"
+    ! write(700, *) "Simulation parameters:"
+    ! write(700, *) "======================"
+    ! write(700, *) "transverse field        : 1"
+    ! write(700, *) "temperature             : 2"
+    ! write(700, *) "============================"
+    ! write(700, *) "Scalar observables: avg, err"
+    ! write(700, *) "============================"        
+    ! do obs = 1, P0%Nscalar_prop
+    !     write(700, *) P0_STR(obs), 2 +(obs-1)*2 + 1, 2 +(obs-1)*2 + 2
+    ! enddo
+    ! close(700)
+    ! endif 
 
+    call Phys_Print(P0=P0, Kgrid=Kgrid, S=S, MatsuGrid=MatsuGrid, hx=hx, temp=temp)
 
     call deallocate_globals
 

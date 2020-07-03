@@ -373,24 +373,25 @@ module measurements
     end subroutine Phys_Measure
 
 
-    subroutine Phys_Print(P0, Kgrid, MatsuGrid, basename, hx, temp)
-        use MPI_parallel, only: MPI_rank, chr_rank, root_rank     ! global variables 
+    subroutine Phys_Print(P0, Kgrid, S, MatsuGrid, hx, temp)
+        use MPI_parallel, only: MPI_rank, chr_rank, root_rank     ! global variables, IMPROVE
         implicit none 
 
         ! Arguments:
         ! ==========
         type(Phys), intent(in)        :: P0 
         type(t_Kgrid), intent(in)     :: Kgrid 
+        type(Struct), intent(in)      :: S
         type(t_MatsuGrid), intent(in) :: MatsuGrid 
-        character(len=*), intent(in)  :: basename 
 
         ! IMPROVE:
         real(dp), intent(in) :: hx, temp
 
         ! ... Local variables ...
-        integer :: obs, m, q
+        integer :: obs, m, q, idx
 
-        ! Output (clean up !)
+        real(dp) :: qvec(2)
+
         print*, hx, temp, &
         P0%meas(P0_ENERGY, P0%avg), P0%meas(P0_ENERGY, P0%err), &
         P0%meas(P0_MAGNETIZATION, P0%avg), P0%meas(P0_MAGNETIZATION, P0%err), &
@@ -402,11 +403,8 @@ module measurements
             ( P0%meas(obs, P0%avg), P0%meas(obs, P0%err), obs = 1, P0%Nscalar_prop )
         close(500)
 
-        ! Write out all bins of the imaginary time correlation function 
-        ! in a format which is useful for postprocessing by a code for analytical continuation.
-        ! For each momentum point write out all bins, separated by empty lines. 
+        ! Write out average of imaginary time correlation function 
         open(100, file="Sqz_matsu"//chr_rank//".dat", position="append", status="unknown")
-        print*, "shape(P0%AzBzq_Matsu)=", shape(P0%AzBzq_Matsu)
         do m = 1, MatsuGrid%N_Matsubara
             write(100, *) MatsuGrid%im_Matsubara(m), ( P0%AzBzq_Matsu((m-1)*Kgrid%Nq + q, P0%avg), &
                         P0%AzBzq_Matsu((m-1)*Kgrid%Nq + q, P0%err), q=1, Kgrid%Nq )
@@ -414,6 +412,25 @@ module measurements
         write(100, *)
         write(100, *)
         close(100)
+
+        ! Write out all bins of the imaginary time correlation function 
+        ! in a format which is useful for postprocessing by a code for analytical continuation.
+        ! For each momentum point write out all bins, separated by empty lines. 
+        open(200, file="corr_matsu"//chr_rank//".dat", position="append", status="unknown")
+        do q=1, Kgrid%Nq
+            qvec = Kgrid%listk(1,q)*S%b1_p + Kgrid%listk(2,q)*S%b2_p
+            do idx = 1, size(P0%AzBzq_Matsu, dim=2) - 2   ! loop over bins, last two bins are avg and err      
+                write(200, *) q, qvec(1), qvec(2)
+                do m = 1, MatsuGrid%N_Matsubara
+                    write(200, *) MatsuGrid%im_Matsubara(m),  P0%AzBzq_Matsu((m-1)*Kgrid%Nq + q, idx)
+                enddo 
+                write(200, *)
+            enddo
+        enddo 
+        write(200, *)
+        write(200, *)
+        close(200)
+
 
         if( MPI_rank == root_rank) then 
             open(700, file="output.txt", status="unknown", action="write")
