@@ -1,0 +1,7 @@
+1. Treat translationally invariant systems (with or without a nuit cell) 
+   differently 
+2. Crystallographic fast Fourier transform 
+3. Clean up single-site cluster update (may be useful when other algorithms fail, e.g. for spin glasses).
+4. Calculate autocorrelation times. 
+5. Make sure all subroutines display their theoretically expected scaling of runtime 
+   with input size.  
