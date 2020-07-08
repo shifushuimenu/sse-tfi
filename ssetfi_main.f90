@@ -137,16 +137,11 @@ program ssetfi
     character(len=30) :: Jmatrix_file = "Jmatrix.txt"
     character(len=12) :: paramscan
     real(dp) :: scan_min = 0.0, scan_max = 0.0
+    logical :: heavy_use = .FALSE.
     logical :: deterministic = .FALSE.
 
     ! Imaginary time correlations 
     type(t_MatsuGrid)  :: MatsuGrid
-
-    ! REMOVE TEMPORARY OBSERVABLES 
-    complex(dp), allocatable :: chiqAzBz(:,:)
-    real(dp), allocatable :: SxSxTimeCorr(:)
-    ! REMOVE TEMPORARY OBSERVABLES 
-
     ! ***********************************************
 
     type(Phys) :: P0
@@ -154,15 +149,15 @@ program ssetfi
     type(t_Kgrid) :: Kgrid
 
     integer ::  ir, jr, k, i
-    integer :: iit, iim, m, q
-    integer :: obs
+    integer :: iit, iim
     integer :: ioerr 
+    integer :: t1, t2, rate 
 
     real(dp), allocatable :: J_matrix_out(:,:)
 
     NAMELIST /SIMPARAMS/ J_1, hx, temp, nx, ny, n_sites, nmeas_step, ntherm_step, Nbin, &
         lattice_type, ignore_Jmatrix, Jmatrix_file, paramscan, &
-        scan_min, scan_max, deterministic
+        scan_min, scan_max, heavy_use, deterministic
 
 #if defined (USE_MPI)
     include "mpif.h"
@@ -189,7 +184,11 @@ program ssetfi
         hx = scan_min + MPI_rank * (scan_max - scan_min)/ float(MPI_size)
     elseif(trim(paramscan) == "paramscan_T") then 
         temp = scan_min + MPI_rank * (scan_max - scan_min)/ float(MPI_size)
-    else
+    elseif(trim(paramscan) == "paramscan_L") then 
+        nx = 3 + 3 * MPI_rank
+        ny = 3 + 3 * MPI_rank
+        n_sites = nx * ny * 3  ! only for kagome ! REMOVE
+    else 
         print*, "ERROR: Unknown value of input parameter `paramscan`"
         stop
     endif 
@@ -341,65 +340,30 @@ program ssetfi
 
     call Phys_Init(P0=P0, S=S, Kgrid=Kgrid, MatsuGrid=MatsuGrid, beta=beta, Nbin=Nbin)
 
+    call system_clock(count=t1)
+
     do iim = 1, nmeas_step
         call one_MCS_plaquette( beta=beta, Jij_sign=Jij_sign, spins=spins, &
             opstring=opstring, config=config, probtable=probtable, &
             plaquettes=plaquettes, vertexlink=vertexlink, &
             leg_visited=leg_visited )
         call Phys_Measure(P0, S, Kgrid, MatsuGrid, config, spins, opstring, &
-            beta, probtable%consts_added)
+            beta, probtable%consts_added, heavy_use=heavy_use)
 
         if (mod(iim, nmeas_step / Nbin) == 0) then 
             call Phys_Avg(P0)
         endif 
     enddo
 
+    call system_clock(count=t2, count_rate=rate)
+    open(unit=777, file="log_ncpu"//chr_rank//".log", status="Unknown", position="rewind")
+    write(777,*) "Running time per measurement MCS: ", (t2 - t1) / real(rate) / real(nmeas_step), "(seconds)"
+    close(777)
+
     call Phys_GetErr(P0)
 
-    ! ! Output (clean up !)
-    ! print*, hx, temp, &
-    ! P0%meas(P0_ENERGY, P0%avg), P0%meas(P0_ENERGY, P0%err), &
-    ! P0%meas(P0_MAGNETIZATION, P0%avg), P0%meas(P0_MAGNETIZATION, P0%err), &
-    ! P0%meas(P0_COPARAM, P0%avg), P0%meas(P0_COPARAM, P0%err), &
-    ! P0%meas(P0_SPECIFIC_HEAT, P0%avg), P0%meas(P0_SPECIFIC_HEAT, P0%err)
-
-    ! open(500, file='averages'//chr_rank//'.dat', position='append', status='unknown')
-    ! write(500, *) hx, temp, &
-    !         !   P0%meas(P0_ENERGY, P0%avg), P0%meas(P0_ENERGY, P0%err), &
-    !         !   P0%meas(P0_MAGNETIZATION, P0%avg), P0%meas(P0_MAGNETIZATION, P0%err), &
-    !         !   P0%meas(P0_COPARAM, P0%avg), P0%meas(P0_COPARAM, P0%err)
-    !         ( P0%meas(obs, P0%avg), P0%meas(obs, P0%err), obs = 1, P0%Nscalar_prop )
-    ! close(500)
-
-    ! open(100, file="Sqz_matsu"//chr_rank//".dat", position="append", status="unknown")
-    ! print*, "shape(P0%AzBzq_Matsu)=", shape(P0%AzBzq_Matsu)
-    ! print*, MatsuGrid%N_Matsubara, Kgrid%Nq, Kgrid%Nq * MatsuGrid%N_Matsubara
-    ! do m = 1, MatsuGrid%N_Matsubara
-    ! write(100, *) MatsuGrid%im_Matsubara(m), ( P0%AzBzq_Matsu((m-1)*Kgrid%Nq + q, P0%avg), &
-    ! P0%AzBzq_Matsu((m-1)*Kgrid%Nq + q, P0%err), q=1, Kgrid%Nq )
-    ! enddo 
-    ! write(100, *)
-    ! write(100, *)
-    ! close(100)
-
-    ! if( MPI_rank == root_rank) then 
-    ! open(700, file="output.txt", status="unknown", action="write")
-    ! write(700, *) "The columns in the file averageXXXXX.dat have the following meaning:"
-    ! write(700, *) "======================"
-    ! write(700, *) "Simulation parameters:"
-    ! write(700, *) "======================"
-    ! write(700, *) "transverse field        : 1"
-    ! write(700, *) "temperature             : 2"
-    ! write(700, *) "============================"
-    ! write(700, *) "Scalar observables: avg, err"
-    ! write(700, *) "============================"        
-    ! do obs = 1, P0%Nscalar_prop
-    !     write(700, *) P0_STR(obs), 2 +(obs-1)*2 + 1, 2 +(obs-1)*2 + 2
-    ! enddo
-    ! close(700)
-    ! endif 
-
-    call Phys_Print(P0=P0, Kgrid=Kgrid, S=S, MatsuGrid=MatsuGrid, hx=hx, temp=temp)
+    call Phys_Print(P0=P0, Kgrid=Kgrid, S=S, MatsuGrid=MatsuGrid, hx=hx, &
+            temp=temp, heavy_use=heavy_use)
 
     call deallocate_globals
 
