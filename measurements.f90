@@ -41,10 +41,12 @@ module measurements
     type Phys
         ! Monte Carlo measurements 
         integer :: Nbin         ! number of bins 
+        integer :: nmeas        ! total number of measurement steps 
         integer :: Nscalar_prop ! total number of scalar measured properties
         integer :: Narray_prop  ! total number of elements of all array-like properties 
         integer :: avg        ! avg = Nbin + 1
         integer :: err        ! err = Nbin + 2 
+        integer :: ac_time    ! ac_time = Nbin + 3, P0%meas(:, ac_time) stores the running <x^2> and,finally, the AC time. 
 
         integer :: cnt     ! current number of MC measurements *inside* current bin 
         integer :: idx     ! current bin index 
@@ -79,7 +81,7 @@ module measurements
 
     contains 
 
-    subroutine Phys_Init(P0, S, Kgrid, MatsuGrid, beta, Nbin)
+    subroutine Phys_Init(P0, S, Kgrid, MatsuGrid, beta, Nbin, nmeas)
     ! 
     ! Purpose:
     ! ========
@@ -94,22 +96,29 @@ module measurements
     ! ==========
     type(Phys), intent(inout) :: P0     ! Phys to be initialized 
     type(Struct), intent(in) :: S
-    integer, intent(in) :: Nbin
-    real(dp), intent(in) :: beta
     type(t_Kgrid), intent(inout) :: Kgrid 
     type(t_MatsuGrid), intent(inout) :: MatsuGrid
+    real(dp), intent(in) :: beta
+    integer, intent(in) :: Nbin         ! Number of bins 
+    integer, intent(in) :: nmeas        ! total number of measurement steps 
+
 
     ! ... Local vars ...
     integer :: i, n
 
     ! ... Executable ...
 
+    if( mod(nmeas, Nbin) /= 0 ) then 
+         stop "Error, Phys_Init(): `nmeas_step` must be an integer multiple of the number of bins" 
+    endif 
     P0%Nbin = Nbin 
+    P0%nmeas = nmeas 
     P0%Nsites = S%Nsites 
     P0%beta = beta 
 
     P0%avg = Nbin + 1
     P0%err = Nbin + 2 
+    P0%ac_time = Nbin + 3 
     P0%cnt = 0
     P0%idx = 1 
 
@@ -130,13 +139,9 @@ module measurements
     P0%Narray_prop = sum(array_sizes(1:narrays))
 
     n = P0%Nscalar_prop + P0%Narray_prop
-    allocate(P0%AllProp(n, P0%err))
+    allocate(P0%AllProp(n, P0%ac_time))
 
     ! Pointer to beginning of each array 
-
-    ! do i = 1, narrays + 1
-        ! P0%IARR(i) = P0%Nscalar_prop + 1 + (i - 1) * array_sizes(i - 1)
-    ! enddo
     P0%IARR(IMEAS) = 1
     P0%IARR(ISFA0) = P0%Nscalar_prop + 1
     do i = 2, narrays + 1
@@ -204,6 +209,7 @@ module measurements
     ! Purpose:
     ! ========
     !   Compute averages and errors of the measurements.
+    !   Also compute autocorrelation times with the binning method.
     !
     ! Arguments:
     ! ==========
@@ -225,7 +231,7 @@ module measurements
 
     if (nproc == 1) then 
         
-        ! Error of  scalar quantities 
+        ! Error of scalar quantities 
         do i = 1, P0%Nscalar_prop
             data = P0%meas(i, 1:n)
             call JackKnife(n, P0%meas(i, avg), P0%meas(i, err), data, &
@@ -239,13 +245,58 @@ module measurements
              y, sgn, sum_sgn )
         enddo 
 
-    else
+        ! Compute autocorrelation times for scalar quantities 
+        do i = 1, P0%Nscalar_prop
+            data = P0%meas(i, 1:n)
+            P0%meas(i, P0%ac_time) = ACT_BinningMethod(  &
+                P0%nmeas / P0%Nbin, data, P0%meas(i, P0%ac_time) / real(P0%nmeas, kind=dp) )
+        enddo 
+
+    else 
+        ! MPI parallelization over measurement steps 
+        ! In this case the autocorrelation time is not computed. 
 
     endif 
 
     end subroutine Phys_GetErr
 
 
+    pure function ACT_BinningMethod(Nsamples_per_bin, bin_vals, x2_av_tot) result(AC_time)
+    ! Purpose:
+    ! ========
+    !  Compute the autocorrelation time of quantity x 
+    !  with the binning method. 
+    ! 
+    ! Arguments:
+    ! ==========
+        integer, intent(in) :: Nsamples_per_bin   ! number of values in each bin 
+        real(dp), intent(in) :: bin_vals(:)       ! array of bin averages <x>_{bin_i}
+        real(dp), intent(in) :: x2_av_tot         ! <x^2> over the entire Markov chain 
+        real(dp) :: AC_time 
+
+    ! ... Local variables ...
+        real(dp) :: bin_av_variance    ! variance of the bin averages 
+        real(dp) :: total_variance     ! variance over the entire Markov chain 
+        real(dp) :: x_av, x2_av        ! average and variance of bin averages 
+        real(dp) :: factor  
+        integer :: i, n
+
+        n = size(bin_vals, dim=1)
+        factor = 1.0 / real(n, kind=dp)
+        x_av = 0.0_dp; x2_av = 0.0_dp
+        do i = 1, n
+            x_av = x_av + bin_vals(i)
+            x2_av = x2_av + bin_vals(i)**2
+        enddo 
+        x_av = x_av * factor 
+        bin_av_variance = x2_av * factor - x_av**2
+        total_variance = x2_av_tot - x_av**2
+
+        AC_time = Nsamples_per_bin * (bin_av_variance / total_variance)
+
+    end function ACT_BinningMethod
+
+    
     subroutine Phys_Measure(P0, S, Kgrid, MatsuGrid, config, spins, opstring, &
                 beta, consts_added, heavy_use)
         use util, only: spins2binrep
@@ -349,6 +400,7 @@ module measurements
 
         ! Accumulate result to P0(:, idx)
         P0%meas(:, idx) = P0%meas(:, idx) + P0%meas(:, tmp_idx)
+        P0%meas(:, P0%ac_time) = P0%meas(:, P0%ac_time) + P0%meas(:, tmp_idx)**2
 
 
         ! open(100, file='TS.dat', position='append', status='unknown')
@@ -398,9 +450,10 @@ module measurements
         P0%meas(P0_COPARAM, P0%avg), P0%meas(P0_COPARAM, P0%err), &
         P0%meas(P0_SPECIFIC_HEAT, P0%avg), P0%meas(P0_SPECIFIC_HEAT, P0%err)
 
+        ! Averages, error bars and autocorrelation times for all scalar quantities 
         open(500, file='averages'//chr_rank//'.dat', position='append', status='unknown')
         write(500, *) hx, temp, &
-            ( P0%meas(obs, P0%avg), P0%meas(obs, P0%err), obs = 1, P0%Nscalar_prop )
+            ( P0%meas(obs, P0%avg), P0%meas(obs, P0%err), P0%meas(obs, P0%ac_time), obs = 1, P0%Nscalar_prop )
         close(500)
 
         if( heavy_use ) then 

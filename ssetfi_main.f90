@@ -153,6 +153,10 @@ program ssetfi
     integer :: ioerr 
     integer :: t1, t2, rate 
 
+    !REMOVE
+    character(len=3) :: chr_L
+    !REMOVE
+
     real(dp), allocatable :: J_matrix_out(:,:)
 
     NAMELIST /SIMPARAMS/ J_1, hx, temp, nx, ny, n_sites, nmeas_step, ntherm_step, Nbin, &
@@ -188,6 +192,14 @@ program ssetfi
         nx = 3 + 3 * MPI_rank
         ny = 3 + 3 * MPI_rank
         n_sites = nx * ny * 3  ! only for kagome ! REMOVE
+        if (nx < 10 ) then 
+            write(chr_L, '(i1)') nx
+        else
+            write(chr_L, '(i2)') nx
+        endif 
+        Jmatrix_file = "J"//trim(chr_L)//"x"//trim(chr_L)//"_inplane.txt"
+        print*, Jmatrix_file 
+        stop 
     else 
         print*, "ERROR: Unknown value of input parameter `paramscan`"
         stop
@@ -338,7 +350,8 @@ program ssetfi
         endif 
     enddo
 
-    call Phys_Init(P0=P0, S=S, Kgrid=Kgrid, MatsuGrid=MatsuGrid, beta=beta, Nbin=Nbin)
+    call Phys_Init(P0=P0, S=S, Kgrid=Kgrid, MatsuGrid=MatsuGrid, beta=beta,&
+         Nbin=Nbin, nmeas=nmeas_step)
 
     call system_clock(count=t1)
 
