@@ -74,46 +74,74 @@ end function
 !    vleg > MAX_GHOSTLEGS/2 points UP
 !    and vleg <= MAX_GHOSTLEGS/2 points DOWN
 ! even for two-leg and four-leg vertices. 
-pure function leg_direction(opstring, gleg) result(dir)
-    implicit none 
-    type(t_BondOperator), intent(in) :: opstring(:)
-    ! gleg is the global leg number
-    integer, intent(in) :: gleg       
+
+
+
+! pure function leg_direction(opstring, gleg) result(dir)
+!     implicit none 
+!     type(t_BondOperator), intent(in) :: opstring(:)
+!     ! gleg is the global leg number
+!     integer, intent(in) :: gleg       
     
+!     integer :: dir
+!     integer :: ip, site_i, site_j
+!     ! vleg is the leg number around a vertex
+!     integer :: vleg 
+
+!     ip = (gleg-1) / MAX_GHOSTLEGS + 1
+!     ! Site %i and %j are just needed to determine the operator type.
+!     site_i = opstring(ip)%i 
+!     site_j = opstring(ip)%j
+
+!     vleg = mod(gleg-1, MAX_GHOSTLEGS) + 1
+!     if( site_i < 0 ) then 
+!     ! triangular plaquette
+!         if(vleg <= 3) then
+!             dir = DOWN
+!         else
+!             dir = UP
+!         endif 
+!     elseif( site_i > 0 ) then 
+!         if( site_j > site_i) then 
+!         ! Ising operator
+!             if( vleg <= 2 ) then 
+!                 dir = DOWN
+!             else
+!                 dir = UP
+!             endif 
+!         elseif( site_j <= site_i) then
+!         ! constant or spin-flip operator 
+!             if ( vleg == 1) then 
+!                 dir = DOWN
+!             else
+!                 dir = UP
+!             endif 
+!         endif 
+!     endif 
+
+! end function leg_direction 
+
+pure function leg_direction(gleg) result(dir)
+    implicit none 
+    ! Arguments:
+    ! ==========
+    ! gleg is the global leg number
+    integer, intent(in) :: gleg     
     integer :: dir
-    integer :: ip, site_i, site_j
+
+    ! ... Local variables ...
+    integer :: ip 
     ! vleg is the leg number around a vertex
-    integer :: vleg 
+    integer :: vleg     
 
+    ! ... Executable ...
     ip = (gleg-1) / MAX_GHOSTLEGS + 1
-    ! Site %i and %j are just needed to determine the operator type.
-    site_i = opstring(ip)%i 
-    site_j = opstring(ip)%j
-
     vleg = mod(gleg-1, MAX_GHOSTLEGS) + 1
-    if( site_i < 0 ) then 
-    ! triangular plaquette
-        if(vleg <= 3) then
-            dir = DOWN
-        else
-            dir = UP
-        endif 
-    elseif( site_i > 0 ) then 
-        if( site_j > site_i) then 
-        ! Ising operator
-            if( vleg <= 2 ) then 
-                dir = DOWN
-            else
-                dir = UP
-            endif 
-        elseif( site_j <= site_i) then
-        ! constant or spin-flip operator 
-            if ( vleg == 1) then 
-                dir = DOWN
-            else
-                dir = UP
-            endif 
-        endif 
+
+    if( vleg > MAX_GHOSTLEGS/2 ) then 
+        dir = UP
+    else 
+        dir = DOWN
     endif 
 
 end function leg_direction 
@@ -249,7 +277,7 @@ do while( LEGS_TO_BE_PROCESSED )
         leg_next = vertexlink(leg)
 
         ! Check for winding macrospin 
-        dir = leg_direction(opstring, leg)     
+        dir = leg_direction(leg)     
         if( (leg_next - leg)*dir < 0 ) then
             ip = (leg_next-1) / MAX_GHOSTLEGS + 1 
             ir = gleg_to_ir( opstring(ip), leg_next )
@@ -389,7 +417,7 @@ i1 = opstring(ip)%i
 i2 = opstring(ip)%j
 i3 = opstring(ip)%k
 
-dir = leg_direction(opstring, gleg)
+dir = leg_direction(gleg)
 
 if( i1.lt.0 ) then
 

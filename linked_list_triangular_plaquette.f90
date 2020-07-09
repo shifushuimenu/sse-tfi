@@ -17,15 +17,14 @@ MODULE linked_list
 
     USE SSE_configuration 
     
-
     CONTAINS
 
 subroutine build_linkedlist_plaquette( &
   opstring, config, vertexlink, leg_visited )
 !---------------------------------------------------------------!
-! convention for numbering of vertex legs:                      !
+! convention for numbering of vertex legs (`vleg`):             !
 !                                                               !
-!   Ising operator:		Spin-flip operator or constant: !
+!   Ising operator:		Spin-flip operator or constant:           !
 !  (4)           (5)  [3,6]           (4)   [2,3,5,6]           !
 !   |_____________|                    |                        !
 !   |             |                    |                        !
@@ -39,8 +38,13 @@ subroutine build_linkedlist_plaquette( &
 !        |A-site       |B-site       |C-site                    !
 !       (1)           (2)           (3)                         !
 !                                                               !
-! Note: "ghostlegs" in square brackets are not connected to     !
+! Note 1: "ghostlegs" in square brackets are not connected to   !
 !       any other legs.                                         !
+! Note 2: The labelling scheme around a vertex is chosen such   ! 
+!       that                                                    !
+!          vleg > MAX_GHOSTLEGS/2 points UP                     !
+!          and vleg <= MAX_GHOSTLEGS/2 points DOWN              !
+!       even for two-leg and four-leg vertices.                 !
 !---------------------------------------------------------------!
 implicit none 
 

@@ -3,6 +3,7 @@ module SSE_configuration
   
     ! labelling of legs 
     integer, parameter :: MAX_GHOSTLEGS = 6
+    integer, parameter :: MAX_GHOSTLEGS_HALF = MAX_GHOSTLEGS / 2
     ! operator types 
     integer, parameter :: IDENTITY = 100
     integer, parameter :: ISING_BOND = 10
