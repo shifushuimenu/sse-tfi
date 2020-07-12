@@ -23,15 +23,15 @@ module ssetfi_globals
     
     subroutine deallocate_globals
     
-        deallocate(sublattice)
-        deallocate(neigh)
-        deallocate(plaquettes)
-        deallocate(J_interaction_matrix)
-        deallocate(Jij_sign)
-        deallocate(spins)
-        deallocate(opstring)
-        deallocate(vertexlink)
-        deallocate(leg_visited)
+        if( allocated(sublattice) ) deallocate(sublattice)
+        if( allocated(neigh) ) deallocate(neigh)
+        if( allocated(plaquettes) ) deallocate(plaquettes)
+        if( allocated(J_interaction_matrix) ) deallocate(J_interaction_matrix)
+        if( allocated(Jij_sign) ) deallocate(Jij_sign)
+        if( allocated(spins) ) deallocate(spins)
+        if( allocated(opstring) ) deallocate(opstring)
+        if( allocated(vertexlink) ) deallocate(vertexlink)
+        if( allocated(leg_visited) ) deallocate(leg_visited)
         
     end subroutine deallocate_globals 
     

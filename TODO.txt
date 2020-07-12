@@ -1,7 +1,8 @@
-1. Treat translationally invariant systems (with or without a nuit cell) 
-   differently 
+1. Treat translationally invariant systems (with or without a unit cell) 
+   differently to reduce memory consumption. 
 2. Crystallographic fast Fourier transform 
 3. Clean up single-site cluster update (may be useful when other algorithms fail, e.g. for spin glasses).
-4. Calculate autocorrelation times. 
+4. Calculate autocorrelslation times. (DONE)
 5. Make sure all subroutines display their theoretically expected scaling of runtime 
-   with input size.  
+   with input size. 
+6. Implement assert routine, pass an optional parameter to each routine to enable/disable the checks.  

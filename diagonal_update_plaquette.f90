@@ -64,7 +64,7 @@ real(dp) :: prob
 ! propagated spin configuration at a given propagation step
 integer, allocatable :: spins2(:) 
 
-logical :: FOUND, OP_INSERTED
+logical :: OP_INSERTED
 
 ! for plaquette-based cluster update 
 integer :: ir_A, ir_B, ir_C

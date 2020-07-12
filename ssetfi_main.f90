@@ -198,8 +198,7 @@ program ssetfi
             write(chr_L, '(i2)') nx
         endif 
         Jmatrix_file = "J"//trim(chr_L)//"x"//trim(chr_L)//"_inplane.txt"
-        print*, Jmatrix_file 
-        stop 
+        print*, Jmatrix_file
     else 
         print*, "ERROR: Unknown value of input parameter `paramscan`"
         stop
@@ -333,6 +332,8 @@ program ssetfi
     call init_probtables( S=S, J_interaction_matrix=J_interaction_matrix, &
         hx=hx, probtable=probtable, Jij_sign=Jij_sign, J_1=J_1, &
         n_plaquettes=size(plaquettes,dim=1), TRANSLAT_INV=.FALSE.)
+    ! J_interaction_matrix is not needed anymore.
+    if( allocated(J_interaction_matrix) ) deallocate( J_interaction_matrix )
 
     call init_SSEconfig_hostart( S=S, LL=10, config=config, &
         opstring=opstring, spins=spins, vertexlink=vertexlink, leg_visited=leg_visited )

@@ -68,58 +68,6 @@ pure function gleg_to_ir(op, gleg) result(ir)
 
 end function
 
-! IMPROVE: This function should be removed in favour 
-! of a new labelling scheme of legs around a vertex
-! where 
-!    vleg > MAX_GHOSTLEGS/2 points UP
-!    and vleg <= MAX_GHOSTLEGS/2 points DOWN
-! even for two-leg and four-leg vertices. 
-
-
-
-! pure function leg_direction(opstring, gleg) result(dir)
-!     implicit none 
-!     type(t_BondOperator), intent(in) :: opstring(:)
-!     ! gleg is the global leg number
-!     integer, intent(in) :: gleg       
-    
-!     integer :: dir
-!     integer :: ip, site_i, site_j
-!     ! vleg is the leg number around a vertex
-!     integer :: vleg 
-
-!     ip = (gleg-1) / MAX_GHOSTLEGS + 1
-!     ! Site %i and %j are just needed to determine the operator type.
-!     site_i = opstring(ip)%i 
-!     site_j = opstring(ip)%j
-
-!     vleg = mod(gleg-1, MAX_GHOSTLEGS) + 1
-!     if( site_i < 0 ) then 
-!     ! triangular plaquette
-!         if(vleg <= 3) then
-!             dir = DOWN
-!         else
-!             dir = UP
-!         endif 
-!     elseif( site_i > 0 ) then 
-!         if( site_j > site_i) then 
-!         ! Ising operator
-!             if( vleg <= 2 ) then 
-!                 dir = DOWN
-!             else
-!                 dir = UP
-!             endif 
-!         elseif( site_j <= site_i) then
-!         ! constant or spin-flip operator 
-!             if ( vleg == 1) then 
-!                 dir = DOWN
-!             else
-!                 dir = UP
-!             endif 
-!         endif 
-!     endif 
-
-! end function leg_direction 
 
 pure function leg_direction(gleg) result(dir)
     implicit none 
@@ -146,6 +94,7 @@ pure function leg_direction(gleg) result(dir)
 
 end function leg_direction 
         
+
 pure function operator_type(op) result(t)
     implicit none 
     type(t_BondOperator), intent(in) :: op
