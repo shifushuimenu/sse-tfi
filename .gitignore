@@ -1,4 +1,6 @@
 *.mod
 *.o
 *.dat
+*.log
+*.txt
 
