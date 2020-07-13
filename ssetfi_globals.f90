@@ -10,6 +10,7 @@ module ssetfi_globals
     type(t_Plaquette), allocatable :: plaquettes(:)
     
     real(dp), allocatable :: J_interaction_matrix(:,:)
+    real(dp), allocatable :: J_translat_invar(:,:)
     integer, allocatable  :: Jij_sign(:,:)
     type(t_ProbTable) :: probtable 
         

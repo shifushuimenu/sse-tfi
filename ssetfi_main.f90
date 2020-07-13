@@ -14,7 +14,7 @@ module ssetfi_main
 
     contains
 
-subroutine one_MCS_plaquette(beta, Jij_sign, spins, opstring, &
+subroutine one_MCS_plaquette(S, beta, Jij_sign, TRANSLAT_INVAR, spins, opstring, &
                 config, probtable, plaquettes, vertexlink, &
                 leg_visited)
     ! *****************************************************
@@ -25,8 +25,10 @@ subroutine one_MCS_plaquette(beta, Jij_sign, spins, opstring, &
     ! completing one MCS. 
     ! *****************************************************   
 
+    type(Struct), intent(in) :: S
     real(dp), intent(in) :: beta
     integer, allocatable, intent(in) :: Jij_sign(:,:)
+    logical, intent(in) :: translat_invar
     integer, allocatable, intent(inout) :: spins(:)
     type(t_BondOperator), allocatable, intent(inout) :: opstring(:)    
     type(t_Config), intent(inout) :: config
@@ -40,10 +42,10 @@ subroutine one_MCS_plaquette(beta, Jij_sign, spins, opstring, &
     ! IMPROVE: no obscure number codes 
     do ut = 111, 113, 1
         ! loop over A-update (=111), B-update (=112) and C-update (=113)
-        call diagonal_update_plaquette(beta=beta, &
+        call diagonal_update_plaquette(S=S, beta=beta, &
             Jij_sign=Jij_sign, spins=spins, opstring=opstring, &
             config=config, probtable=probtable, plaquettes=plaquettes,&
-            update_type=ut)
+            update_type=ut, TRANSLAT_INVAR=translat_invar)
         call build_linkedlist_plaquette( &
             opstring=opstring, config=config, &
             vertexlink=vertexlink, leg_visited=leg_visited )        
@@ -135,6 +137,7 @@ program ssetfi
     character(len=10) :: lattice_type = "triangular"
     logical :: ignore_Jmatrix = .FALSE.
     character(len=30) :: Jmatrix_file = "Jmatrix.txt"
+    logical :: translat_invar = .TRUE.
     character(len=12) :: paramscan
     real(dp) :: scan_min = 0.0, scan_max = 0.0
     logical :: heavy_use = .FALSE.
@@ -160,7 +163,7 @@ program ssetfi
     real(dp), allocatable :: J_matrix_out(:,:)
 
     NAMELIST /SIMPARAMS/ J_1, hx, temp, nx, ny, n_sites, nmeas_step, ntherm_step, Nbin, &
-        lattice_type, ignore_Jmatrix, Jmatrix_file, paramscan, &
+        lattice_type, ignore_Jmatrix, Jmatrix_file, translat_invar, paramscan, &
         scan_min, scan_max, heavy_use, deterministic
 
 #if defined (USE_MPI)
@@ -238,7 +241,6 @@ program ssetfi
     ! Nearest neighbour interactions are already taken care 
     ! of by the plaquette operators. 
     allocate( J_interaction_matrix(S%Nsites,S%Nsites) )
-    allocate( Jij_sign(S%Nsites, S%Nsites) )
     if(ignore_Jmatrix) then 
         J_interaction_matrix(:,:) = ZERO
     else
@@ -324,13 +326,35 @@ program ssetfi
     endif 
     ! REMOVE
 
+    if (translat_invar) then 
+        call make_translat_invar_kagome( S, J_interaction_matrix, J_translat_invar )
+        allocate( Jij_sign(0:S%Nbravais_sites-1, S%Nbasis*S%Nbasis) )
+        where( J_translat_invar > 0 )
+            Jij_sign = +1
+        elsewhere( J_translat_invar < 0 )
+            Jij_sign = -1
+        elsewhere 
+            Jij_sign = 0
+        endwhere        
+    else ! not translationally invariant system (e.g. for disorder realization)
+        allocate( Jij_sign(S%Nsites, S%Nsites) )
+        where( J_interaction_matrix > 0 )
+            Jij_sign = +1
+        elsewhere( J_interaction_matrix < 0 )
+            Jij_sign = -1
+        elsewhere 
+            Jij_sign = 0
+        endwhere
+        ! IMPROVE: deallocate( J_interaction_matrix )
+    endif 
+
     ! seed random number generator with the system time (at the millisecond level)
     call init_RNG(MPI_rank, DETERMINISTIC=deterministic) 
 
     ! Precompute the probability tables from which diagonal operators 
     ! will be sampled. 
     call init_probtables( S=S, J_interaction_matrix=J_interaction_matrix, &
-        hx=hx, probtable=probtable, Jij_sign=Jij_sign, J_1=J_1, &
+        hx=hx, probtable=probtable, J_1=J_1, &
         n_plaquettes=size(plaquettes,dim=1), TRANSLAT_INV=.FALSE.)
     ! J_interaction_matrix is not needed anymore.
     if( allocated(J_interaction_matrix) ) deallocate( J_interaction_matrix )
@@ -339,8 +363,8 @@ program ssetfi
         opstring=opstring, spins=spins, vertexlink=vertexlink, leg_visited=leg_visited )
 
     do iit = 1, ntherm_step    
-        call one_MCS_plaquette( beta=beta, Jij_sign=Jij_sign, spins=spins, &
-            opstring=opstring, config=config, probtable=probtable, &
+        call one_MCS_plaquette( S=S, beta=beta, Jij_sign=Jij_sign, TRANSLAT_INVAR=translat_invar, &
+            spins=spins, opstring=opstring, config=config, probtable=probtable, &
             plaquettes=plaquettes, vertexlink=vertexlink, &
             leg_visited=leg_visited )
 
@@ -357,8 +381,8 @@ program ssetfi
     call system_clock(count=t1)
 
     do iim = 1, nmeas_step
-        call one_MCS_plaquette( beta=beta, Jij_sign=Jij_sign, spins=spins, &
-            opstring=opstring, config=config, probtable=probtable, &
+        call one_MCS_plaquette( S=S, beta=beta, Jij_sign=Jij_sign, TRANSLAT_INVAR=translat_invar, &
+            spins=spins, opstring=opstring, config=config, probtable=probtable, &
             plaquettes=plaquettes, vertexlink=vertexlink, &
             leg_visited=leg_visited )
         call Phys_Measure(P0, S, Kgrid, MatsuGrid, config, spins, opstring, &

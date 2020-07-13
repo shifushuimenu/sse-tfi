@@ -99,21 +99,36 @@ pure function operator_type(op) result(t)
     implicit none 
     type(t_BondOperator), intent(in) :: op
     integer :: t
-                    
-    if( op%i < 0 ) then         
-        t = TRIANGULAR_PLAQUETTE
-    elseif( op%i > 0) then 
-        if( op%j > op%i ) then 
-            t = ISING_BOND
-        elseif( op%j == op%i ) then 
-            t = CONSTANT 
-        elseif( op%j == 0) then
-            t = SPIN_FLIP
-        endif 
-    elseif( op%i == 0) then 
-        t = IDENTITY
-    endif 
+          
+    ! if( op%i == 0) then 
+    !     t = IDENTITY
+    ! elseif( op%i < 0 ) then         
+    !     t = TRIANGULAR_PLAQUETTE
+    ! elseif( op%i > 0) then 
+    !     if( op%j == 0) then
+    !         t = SPIN_FLIP        
+    !     elseif( op%j == op%i ) then 
+    !         t = CONSTANT     
+    !     elseif( op%j > op%i ) then 
+    !         t = ISING_BOND
+    !     endif 
+    ! endif 
             
+    if( op%i > 0) then 
+        if( op%j == 0) then
+            t = SPIN_FLIP        
+        elseif( op%j == op%i ) then 
+            t = CONSTANT     
+        elseif( op%j > op%i ) then 
+            t = ISING_BOND
+        endif 
+    elseif( op%i < 0 ) then         
+        t = TRIANGULAR_PLAQUETTE        
+    elseif( op%i == 0) then 
+        t = IDENTITY    
+    endif 
+       
+
 end function operator_type 
         
 subroutine quantum_cluster_update_plaquette( &

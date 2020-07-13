@@ -247,7 +247,7 @@ SUBROUTINE cyclic_shift(A, B, C, n)
   INTEGER :: i, tmp
   
   IF ( n < 0 .OR. n > 2) THEN 
-      PRINT*, "cyclic_shift(): WARNING: meaninless input n=", n
+      PRINT*, "cyclic_shift(): WARNING: meaningless input n=", n
       PRINT*, "Exiting ..."
       STOP
   ENDIF 
@@ -537,8 +537,8 @@ SUBROUTINE unit_test_triangular(testfile)
 END SUBROUTINE unit_test_triangular        
 
 
-
-integer function pbc(nr,l)
+! IMPROVE: make this a pure function 
+pure integer function pbc(nr,l)
 ! ==============================================
 ! periodic boundary conditions in one dimension 
 ! ==============================================
@@ -551,12 +551,12 @@ integer function pbc(nr,l)
   pbc = nr
   if (nr.gt.l-1) pbc = nr - l
   if (nr.lt.0) pbc = nr + l
-  if ((nr.ge.2*l).or.(nr.lt.-l)) then 
-     print*, "Error in function pbc(nr,l)"
-     print*, "invalid arguments: nr=", nr, "l=", l
-     print*, "Exiting..."
-     stop
-  endif 
+  ! if ((nr.ge.2*l).or.(nr.lt.-l)) then 
+  !    print*, "Error in function pbc(nr,l)"
+  !    print*, "invalid arguments: nr=", nr, "l=", l
+  !    print*, "Exiting..."
+  !    stop
+  ! endif 
 end function pbc    
 
 
@@ -789,8 +789,109 @@ do irB = 0, S%NBravais_sites-1
     plaq_idx = plaq_idx + 1    
 enddo 
 
+! REMOVE
+! Check the subroutine translate_kagome 
+! print*, "Check translate_kagome"
+! do ir1 = 1, 27
+!   do ir2 = 1, 27 
+!     print*, ir1, ir2, " => ", translate_kagome(S, ir1 ,ir2)
+!   enddo 
+! enddo 
+! stop
+
 end subroutine init_lattice_kagome
 
+
+subroutine make_translat_invar_kagome( S, J_interaction_matrix, J_translat_invar )
+  implicit none 
+  type(Struct) :: S
+  real(dp), allocatable, intent(in) :: J_interaction_matrix(:,:)
+  real(dp), allocatable, intent(out) :: J_translat_invar(:,:)
+
+  ! ... Local variables ...
+  integer :: ir, jr 
+  integer :: r(2)
+  real(dp), parameter :: INIT = -1000000
+
+  ! ... Executable ...
+  allocate( J_translat_invar(0:S%Nbravais_sites-1, 1:S%Nbasis*S%Nbasis) )
+  J_translat_invar(:,:) = INIT 
+
+  do jr = 1, S%Nsites 
+    do ir = 1, S%Nsites ! self-interaction is possible as a result of Ewald summation 
+      r = translate_kagome(S, ir, jr)
+      if( J_translat_invar( r(1), r(2) ) == INIT) then 
+        J_translat_invar( r(1), r(2) ) = J_interaction_matrix( ir, jr )
+      ! Check for translational invariance 
+      elseif( J_translat_invar( r(1), r(2) ) /= J_interaction_matrix( ir, jr ) ) then 
+        print*, "Error: make_translat_invar_kagome(): interaction matrix is not"
+        print*, "       translationally invariant."
+        stop
+      endif 
+    enddo 
+  enddo
+
+  if( any(J_translat_invar == INIT) ) then 
+    print*, "J_translat_invar(:,:) not fully initialized"
+  endif 
+ 
+end subroutine make_translat_invar_kagome
+
+
+pure function translate_kagome(S, i, j) result(r)
+  implicit none 
+! Purpose:
+! ========
+!   With `i` and `j` the linearly stored sites on the kagome 
+!   lattice, return the linearly stored site index `d` of the 
+!   distance vector between the two sites `i` and `j`
+!   and the necessary additional sublattice information. 
+!   ("translation to the origin"). Thus, this function provides 
+!   the two indices (distance, sublattice info) into the translationally 
+!   invariant interaction matrix. 
+! 
+!   site labelling:
+!
+!        3           6           9
+! 
+!     1 --- 2 --- 4 --- 5 --- 7 --- 8 
+! (origin)
+! 
+! Usage:
+! ======
+!      Jsign_transinvar = make_translat_invar_kagome( J_sign )
+!      sign = Jsign_transinvar( translate_kagome(i,j) )
+! 
+! Arguments:
+! ==========
+  type(Struct), intent(in) ::  S
+  integer, intent(in) :: i, j
+! r(1): Bravais distance (ZERO-INDEXED !)
+! r(2): sublattice "difference"
+  integer :: r(2)
+
+! ... Local variables ...
+  integer :: iB, jB
+  integer :: ixB, iyB, jxB, jyB, subi, subj
+
+! Linearly stored Bravais site indices start at zero. 
+  iB = (i-1) / S%Nbasis
+  jB = (j-1) / S%Nbasis
+! Bravais coordinates between sites i and j   
+  ixB = mod(iB, S%Nx_bravais)
+  iyB = iB / S%Nx_bravais
+  jxB = mod(jB, S%Nx_bravais)
+  jyB = jB / S%Nx_bravais
+
+! Bravais distance ( linearly stored index )
+  r(1) = pbc(jxB-ixB, S%Nx_bravais) + pbc(jyB-iyB, S%Nx_bravais) * S%Nx_Bravais
+! sublattice "difference" ( only kagome lattice )
+  subi = mod(i, 3) + 1
+  subj = mod(j, 3) + 1
+
+  r(2) = subi + S%Nbasis * (subj -1)
+
+end function translate_kagome   
 
 subroutine momentum_grid_triangular_Bravais(S, Kgrid)
   ! Purpose:

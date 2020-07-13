@@ -26,8 +26,9 @@ end type
 
   contains 
 
-SUBROUTINE diagonal_update_plaquette( beta, Jij_sign, &
-     spins, opstring, config, probtable, plaquettes, update_type )
+SUBROUTINE diagonal_update_plaquette( S, beta, Jij_sign, &
+     spins, opstring, config, probtable, plaquettes, update_type, &
+     TRANSLAT_INVAR )
 ! **************************************************
 ! Attempt to carry out replacements of the kind
 !     id <--> diag. operator
@@ -42,8 +43,9 @@ implicit none
 
 integer, parameter :: A_UPDATE=111, B_UPDATE=112, C_UPDATE=113
 
+type(Struct), intent(in) :: S                     ! lattice structure object 
 real(dp), intent(in) :: beta          ! inverse temperature 
-integer, intent(in) :: Jij_sign(:,:)  ! sign of the interaction bond (i,j): FM (<0) or AFM (>0)
+integer, allocatable, intent(in) :: Jij_sign(:,:)  ! sign of the interaction bond (i,j): FM (<0) or AFM (>0)
                                       ! Note: If J_ij(i,j) == 0, then the corresponding bond will never be sampled
                                       !       from the cumulative probability table. 
 integer, intent(in) :: spins(:)
@@ -53,8 +55,11 @@ type(t_ProbTable), intent(in) :: probtable
 type(t_Plaquette), intent(in) :: plaquettes(:)
 ! if update_type == A_UPDATE => "A-site update
 integer, intent(in) :: update_type   
+logical, intent(in) :: TRANSLAT_INVAR
 
+! ... Local variables ...
 integer :: ip, i1, i2, index1, index2
+integer :: r(2)
 
 integer :: plaq_idx
 
@@ -68,7 +73,6 @@ logical :: OP_INSERTED
 
 ! for plaquette-based cluster update 
 integer :: ir_A, ir_B, ir_C
-
 
 ALLOCATE(spins2( SIZE(spins,1) ))
 
@@ -108,9 +112,13 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
   ! Try inserting an Ising operator or a constant at propagation step ip
   ! assuming that all insertions are allowed.
     
-    ! Heat bath algorithm for first index (=first site on which the Ising operator acts)
+    ! Heat bath algorithm for first index (=first site on which the Ising operator / const acts)
     call random_number(prob)
-    index1 = binary_search( probtable%P_cumulfirst(:), prob )
+    if( TRANSLAT_INVAR ) then 
+      index1 = ceiling( config%n_sites * prob )
+    else
+      index1 = binary_search( probtable%P_cumulfirst(:), prob )
+    endif 
             
     ! Heat bath algorithm for the second index given the selection of the first index
     call random_number(prob)
@@ -123,7 +131,9 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
 ! is inserted. There is no risk of the search never ending as a constant can always be inserted (for h unequal 0 !).
 
     if (index1.ne.index2) then	!Ising operator, index1 and index2 not equal 0 by construction
-      if ( Jij_sign(index1, index2).gt.0 ) then !AFM
+      ! for translationally invariant system 
+      r = translate_kagome( S, index1, index2 ) ! IMPROVE: so far, only kagome 
+      if ( Jij_sign(r(1), r(2)).gt.0 ) then !AFM
         if (spins2(index1).ne.spins2(index2)) then
           OP_INSERTED = .TRUE.
           if (index1.lt.index2) then
@@ -144,7 +154,7 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
           P_add = beta*probtable%sum_all_diagmatrix_elements &
             / ( float(config%LL-config%n_exp) + beta*probtable%sum_all_diagmatrix_elements )
         endif
-      elseif ( Jij_sign(index1,index2).lt.0 ) then !FM	
+      else !FM; Note that index1 and index2 such that Jij_sign(index1,index2)==0 can never be draw from the prob. tables.
         if (spins2(index1).eq.spins2(index2)) then
           OP_INSERTED = .TRUE.
           if (index1.lt.index2) then
@@ -365,7 +375,7 @@ END FUNCTION binary_search
 
 
 subroutine init_probtables( S, J_interaction_matrix, hx, &
-    probtable, Jij_sign, J_1, n_plaquettes, TRANSLAT_INV )
+    probtable, J_1, n_plaquettes, TRANSLAT_INV )
 ! *******************************************************************
 ! Purpose:
 ! --------
@@ -402,7 +412,6 @@ subroutine init_probtables( S, J_interaction_matrix, hx, &
   real(dp), intent(in)           :: J_interaction_matrix(:,:)
   real(dp), intent(in)           :: hx
   type(t_ProbTable), intent(out) :: probtable 
-  integer, intent(out)           :: Jij_sign(:,:)
   real(dp), intent(in)           :: J_1  ! nearest neighbour interactions inside a plaquette, subroutine expects: J_1 = +1
   integer,intent(in)             :: n_plaquettes 
   logical, intent(in)            :: TRANSLAT_INV
@@ -437,15 +446,8 @@ subroutine init_probtables( S, J_interaction_matrix, hx, &
     print*, "Translational invariance of probability tables not implemented yet."
     print*, "Exiting ..."
     stop
-  endif 
 
-  where( J_interaction_matrix > 0 )
-    Jij_sign = +1
-  elsewhere( J_interaction_matrix < 0 )
-    Jij_sign = -1
-  elsewhere 
-    Jij_sign = 0
-  endwhere
+  endif 
 
   ! number of lattice sites 
   n = size(J_interaction_matrix, 1)
