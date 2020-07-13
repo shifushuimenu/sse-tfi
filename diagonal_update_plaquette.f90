@@ -485,7 +485,7 @@ if (trim(S%lattice_type) == "triangular") then
   ! Triangular lattice 
   cc = cc + (3.0_dp/2.0_dp) * abs(J_1) * n_plaquettes
 elseif (trim(S%lattice_type) == "kagome") then 
-  ! Kagome Llattice 
+  ! Kagome lattice 
   cc = cc + 3.0_dp * abs(J_1) * n_plaquettes
 else
   stop "init_probtables(): Unknown lattice type."
@@ -550,14 +550,6 @@ do ir = 1, n
   enddo
 enddo
 
-! !REMOVE
-! print*, "P_cumulfirst", probtable%P_cumulfirst(:)
-! print*, "P_cumulsecond"
-! do ir = 1,n
-!   print*, ir, probtable%P_cumulsecond(ir,:)
-! enddo
-! stop
-! !REMOVE
 
 end subroutine 
 

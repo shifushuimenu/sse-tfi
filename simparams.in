@@ -56,21 +56,21 @@
 ! ========================================================
 &SIMPARAMS
 J_1 		= 1.0  ! +1.0
-hx  		= 0.1   ! hx > 0 required
-temp 		= 0.01
-nx   		= 9
-ny   		= 9
-n_sites 	= 243
+hx  		= 0.5   ! hx > 0 required
+temp 		= 0.1
+nx   		= 30
+ny   		= 30
+n_sites 	= 2700
 lattice_type = "kagome"
-ignore_Jmatrix = T
-Jmatrix_file = "J9x9_inplane.txt"  !"Jmatrix_nnFM.dat" !"Jmatrix_kagome2x2_FM.dat"  !"Jmatrix_nnFM.dat" 
+ignore_Jmatrix = F
+Jmatrix_file = "J30x30_inplane.txt"  !"Jmatrix_nnFM.dat" !"Jmatrix_kagome2x2_FM.dat"  !"Jmatrix_nnFM.dat" 
 ntherm_step = 1000
 nmeas_step  = 10000
 Nbin        = 10
-paramscan   = "paramscan_T"
+paramscan   = "parampoint"
 scan_min    = 0.3
 scan_max    = 10.0
 heavy_use   = F
-deterministic = T
+deterministic = F
 / 
 ! Slash terminates namelist statement. DO NOT REMOVE 
