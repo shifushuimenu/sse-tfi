@@ -341,7 +341,6 @@ module measurements
 
         energy = (- config%n_exp / beta + consts_added) / float(Nsites)
 
-
         spins_tmp(:) = spins(:)
         l_nochange = 0
         factor = ONE / float(LL)

@@ -1,3 +1,5 @@
+0. Clean up lattice structure (object oriented design ?) and use the triangular Bravais 
+   lattice for constructing the kagome lattice. 
 1. Treat translationally invariant systems (with or without a unit cell) 
    differently to reduce memory consumption. 
 2. Crystallographic fast Fourier transform 
@@ -6,3 +8,5 @@
 5. Make sure all subroutines display their theoretically expected scaling of runtime 
    with input size. 
 6. Implement assert routine, pass an optional parameter to each routine to enable/disable the checks.  
+7. Replace if clauses by boolean arithmetic as much as possible (in optype function and other 
+   places in innermost loops)

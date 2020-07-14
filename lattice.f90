@@ -802,8 +802,21 @@ enddo
 end subroutine init_lattice_kagome
 
 
-subroutine make_translat_invar_kagome( S, J_interaction_matrix, J_translat_invar )
+subroutine make_translat_invar( S, J_interaction_matrix, J_translat_invar )
   implicit none 
+! Purpose:
+! ========
+!   Given a translationally invariant interaction matrix of shape (S%Nsites, S%Nsites),
+!   generate a more compact interaction matrix of dimension 
+!         (0:S%Nbravais_sites-1, 1:S%Nbasis*S%Nbasis),
+!   which takes into account translational invariance. 
+!
+!   This routine should be generic for any lattice structure S.
+!   If the input interaction matrix is not translationally invariant, an 
+!   error is thrown. 
+! 
+! Arguments:
+! ==========  
   type(Struct) :: S
   real(dp), allocatable, intent(in) :: J_interaction_matrix(:,:)
   real(dp), allocatable, intent(out) :: J_translat_invar(:,:)
@@ -819,7 +832,7 @@ subroutine make_translat_invar_kagome( S, J_interaction_matrix, J_translat_invar
 
   do jr = 1, S%Nsites 
     do ir = 1, S%Nsites ! self-interaction is possible as a result of Ewald summation 
-      r = translate_kagome(S, ir, jr)
+      r = translate_to_origin(S, ir, jr)
       if( J_translat_invar( r(1), r(2) ) == INIT) then 
         J_translat_invar( r(1), r(2) ) = J_interaction_matrix( ir, jr )
       ! Check for translational invariance 
@@ -837,10 +850,10 @@ subroutine make_translat_invar_kagome( S, J_interaction_matrix, J_translat_invar
     print*, "J_translat_invar(:,:) not fully initialized"
   endif 
  
-end subroutine make_translat_invar_kagome
+end subroutine make_translat_invar
 
 
-pure function translate_kagome(S, i, j) result(r)
+pure function translate_to_origin(S, i, j) result(r)
   implicit none 
 ! Purpose:
 ! ========
@@ -852,13 +865,15 @@ pure function translate_kagome(S, i, j) result(r)
 !   the two indices (distance, sublattice info) into the translationally 
 !   invariant interaction matrix. 
 ! 
-!   site labelling:
+!   site labelling for e.g. kagome lattice:
 !
 !        3           6           9
 ! 
 !     1 --- 2 --- 4 --- 5 --- 7 --- 8 
 ! (origin)
 ! 
+!   This subroutine should be generic for any lattice structure S. 
+!
 ! Usage:
 ! ======
 !      Jsign_transinvar = make_translat_invar_kagome( J_sign )
@@ -876,6 +891,7 @@ pure function translate_kagome(S, i, j) result(r)
   integer :: iB, jB
   integer :: ixB, iyB, jxB, jyB, subi, subj
 
+! ... Executable ...
 ! Linearly stored Bravais site indices start at zero. 
   iB = (i-1) / S%Nbasis
   jB = (j-1) / S%Nbasis
@@ -887,13 +903,13 @@ pure function translate_kagome(S, i, j) result(r)
 
 ! Bravais distance ( linearly stored index )
   r(1) = pbc(jxB-ixB, S%Nx_bravais) + pbc(jyB-iyB, S%Nx_bravais) * S%Nx_Bravais
-! sublattice "difference" ( only kagome lattice )
-  subi = mod(i, 3) + 1
-  subj = mod(j, 3) + 1
+! sublattice "difference" ( for a Bravais lattice, r(2) = 1 )
+  subi = mod(i, S%NBasis) + 1
+  subj = mod(j, S%Nbasis) + 1
 
   r(2) = subi + S%Nbasis * (subj -1)
 
-end function translate_kagome   
+end function translate_to_origin   
 
 subroutine momentum_grid_triangular_Bravais(S, Kgrid)
   ! Purpose:

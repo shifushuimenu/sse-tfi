@@ -327,7 +327,7 @@ program ssetfi
     ! REMOVE
 
     if (translat_invar) then 
-        call make_translat_invar_kagome( S, J_interaction_matrix, J_translat_invar )
+        call make_translat_invar( S, J_interaction_matrix, J_translat_invar )
         allocate( Jij_sign(0:S%Nbravais_sites-1, S%Nbasis*S%Nbasis) )
         where( J_translat_invar > 0 )
             Jij_sign = +1
@@ -355,7 +355,7 @@ program ssetfi
     ! will be sampled. 
     call init_probtables( S=S, J_interaction_matrix=J_interaction_matrix, &
         hx=hx, probtable=probtable, J_1=J_1, &
-        n_plaquettes=size(plaquettes,dim=1), TRANSLAT_INV=.FALSE.)
+        n_plaquettes=size(plaquettes,dim=1), TRANSLAT_INV=translat_invar)
     ! J_interaction_matrix is not needed anymore.
     if( allocated(J_interaction_matrix) ) deallocate( J_interaction_matrix )
 

@@ -32,6 +32,9 @@
 !   Jmatrix(:,:) and the nearest neighbour interaction given 
 !   by J_1 add up. Long-range interactions should be specified
 !   via the interaction matrix. 
+! translat_invar: logical variable 
+!   Whether the interaction matrix is translationally invariant 
+!   or not.
 ! nmeas_step, Nbin :
 !   In total, `nmeas_step` measurement steps are performed,
 !   which are split into `Nbin` bins. 
@@ -56,20 +59,21 @@
 ! ========================================================
 &SIMPARAMS
 J_1 		= 1.0  ! +1.0
-hx  		= 0.5   ! hx > 0 required
+hx  		= 1.0   ! hx > 0 required
 temp 		= 0.1
-nx   		= 6
-ny   		= 6
-n_sites 	= 108
-lattice_type = "kagome"
-ignore_Jmatrix = F
+nx   		= 3
+ny   		= 3
+n_sites 	= 9
+lattice_type = "triangular"
+ignore_Jmatrix = T
 Jmatrix_file = "J6x6_inplane.txt"  !"Jmatrix_nnFM.dat" !"Jmatrix_kagome2x2_FM.dat"  !"Jmatrix_nnFM.dat" 
+translat_invar = F
 ntherm_step = 1000
 nmeas_step  = 10000
 Nbin        = 10
-paramscan   = "parampoint"
-scan_min    = 0.3
-scan_max    = 10.0
+paramscan   = "paramscan_T"
+scan_min    = 0.1
+scan_max    = 2.0
 heavy_use   = F
 deterministic = F
 / 

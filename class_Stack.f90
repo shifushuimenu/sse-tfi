@@ -55,7 +55,7 @@ module class_Stack
     subroutine stack_deallocate(this)
         class(t_Stack), intent(inout) :: this 
         this%stack_position = 0        
-        deallocate(this%vals)
+        if( allocated(this%vals) ) deallocate(this%vals)
     end subroutine 
 
     function stack_is_empty(this) result(t)

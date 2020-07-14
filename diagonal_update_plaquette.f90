@@ -21,6 +21,7 @@ type t_ProbTable
   real(dp), allocatable :: P_cumulsecond(:,:)
   real(dp) :: sum_all_diagmatrix_elements_2or4leg
   real(dp) :: sum_all_diagmatrix_elements
+  real(dp) :: prob_2or4leg
   real(dp) :: consts_added 
 end type 
 
@@ -108,7 +109,7 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
    ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
    call random_number(prob)
    
-   IF( prob <= (probtable%sum_all_diagmatrix_elements_2or4leg / probtable%sum_all_diagmatrix_elements) ) THEN
+   IF( prob <= (probtable%prob_2or4leg) ) THEN
   ! Try inserting an Ising operator or a constant at propagation step ip
   ! assuming that all insertions are allowed.
     
@@ -501,6 +502,8 @@ elseif (trim(S%lattice_type) == "kagome") then
 else
   stop "init_probtables(): Unknown lattice type."
 endif 
+probtable%prob_2or4leg = probtable%sum_all_diagmatrix_elements_2or4leg &
+                          / probtable%sum_all_diagmatrix_elements
 
 ! Calculate the cumulative probability tables used in the diagonal update
 ! for the insertion of diagonal 2leg and 4leg vertices. 
