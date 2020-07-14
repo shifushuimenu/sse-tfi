@@ -823,9 +823,11 @@ subroutine make_translat_invar_kagome( S, J_interaction_matrix, J_translat_invar
       if( J_translat_invar( r(1), r(2) ) == INIT) then 
         J_translat_invar( r(1), r(2) ) = J_interaction_matrix( ir, jr )
       ! Check for translational invariance 
-      elseif( J_translat_invar( r(1), r(2) ) /= J_interaction_matrix( ir, jr ) ) then 
+      elseif( abs(J_translat_invar( r(1), r(2) ) - J_interaction_matrix( ir, jr )) &
+             > epsilon(1.0_4) ) then 
         print*, "Error: make_translat_invar_kagome(): interaction matrix is not"
         print*, "       translationally invariant."
+        print*, J_translat_invar( r(1), r(2) ), J_interaction_matrix( ir, jr )
         stop
       endif 
     enddo 
