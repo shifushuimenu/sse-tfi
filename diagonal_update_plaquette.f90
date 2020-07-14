@@ -125,7 +125,6 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
       sub1 = mod(index1-1, S%Nbasis) + 1
       index2_from_origin = binary_search( probtable%P_cumulsecond(sub1, :), prob )
       index2 = translate_from_origin( S=S, i=index1, j=index2_from_origin )
-      ! print*, "i1=", index1, "sub1=", sub1, "index2_from_origin=", index2_from_origin,"=>", index2
     else
       index1 = binary_search( probtable%P_cumulfirst(:), prob )
       ! Heat bath algorithm for the second index given the selection of the first index
@@ -138,9 +137,12 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
 ! spin configuration at ip. If it is forbidden, repeat the selection process until an operator 
 ! is inserted. There is no risk of the search never ending as a constant can always be inserted (for h unequal 0 !).
 
-    if (index1.ne.index2) then	!Ising operator, index1 and index2 not equal 0 by construction
-      ! for translationally invariant system 
-      r = translate_to_origin( S, index1, index2 ) ! IMPROVE: so far, only kagome 
+    if (index1.ne.index2) then	! Ising operator, index1 and index2 not equal 0 by construction
+      if( TRANSLAT_INVAR ) then 
+        r = translate_to_origin( S, index1, index2 ) 
+      else
+        r = (/ index1, index2 /)
+      endif 
       if ( Jij_sign(r(1), r(2)).gt.0 ) then !AFM
         if (spins2(index1).ne.spins2(index2)) then
           OP_INSERTED = .TRUE.
@@ -381,187 +383,6 @@ PURE FUNCTION binary_search(cumul_prob_table, prob) RESULT(idx)
 
 END FUNCTION binary_search
 
-
-! subroutine init_probtables( S, J_interaction_matrix, hx, &
-!     probtable, J_1, n_plaquettes, TRANSLAT_INV )
-! ! *******************************************************************
-! ! Purpose:
-! ! --------
-! !    Precompute cumulative probability tables needed for sampling 
-! !    SSE operators during the diagonal update.
-
-! ! Input:
-! ! ------
-! !    S: lattice structure object
-! !    J_interaction_matrix: 2D array of shape (n_sites, n_sitess)
-! !       The element [i,j] contains the 
-! !       interaction between linearly stored sites i and j.
-! !    hx: value of the transverse field 
-! !    n_plaquettes: number of triangular plaquettes
-! !    TRANSLAT_INV: logical
-! !       Indicates whether the interactions are translationally 
-! !       invariant. In this case the interaction matrix can be 
-! !       replaced by a vector. 
-! !       !!! Not implemented yet !!!
-! !
-! ! Output:
-! ! -------
-! !    probtable: structure of type(t_ProbTable)
-! !       Precomputed cumulative probability tables
-! !    Jij_sign: integer array
-! !       Sign of the interaction bonds. 
-! ! 
-! ! *******************************************************************
-!   use SSE_configuration 
-!   use lattice
-!   implicit none 
-
-!   type(Struct), intent(in)       :: S
-!   real(dp), intent(in)           :: J_interaction_matrix(:,:)
-!   real(dp), intent(in)           :: hx
-!   type(t_ProbTable), intent(out) :: probtable 
-!   real(dp), intent(in)           :: J_1  ! nearest neighbour interactions inside a plaquette, subroutine expects: J_1 = +1
-!   integer,intent(in)             :: n_plaquettes 
-!   logical, intent(in)            :: TRANSLAT_INV
-
-!   ! automatic helper arrays
-!   ! array of the matrix elements of the bond operators, i.e. h for i=j and 2|J_ij| else
-!   real(dp) :: M_ij( size(J_interaction_matrix, 1), size(J_interaction_matrix, 1) )
-!   ! relative probabilities for choosing the first index of an Ising operator
-!   real(dp) :: P_first( size(J_interaction_matrix, 1) )
-!   integer :: n
-!   real(dp) :: cc, ss
-
-!   integer :: ir, jr, k
-!   real(dp) :: norm
-
-!   if( J_1 /= +1 ) then 
-!     print*, "For the triangular plaquette update to be meaningful we need J_1 = +1 (i.e. AFM)."
-!     print*, "Furthermore, J_1 sets the energy scale."
-!     if (J_1 == 0) then 
-!       print*, "It is assumed that you set J_1 = 0 in order to suppress the plaquette update" 
-!       print*, "and only use the bond-based update. The interaction matrix for pairwise interacionts"
-!       print*, "should be read from some file."
-!       print*, "Continuing ..."
-!     else
-!       print*, "Exiting ..."
-!       stop
-!     endif 
-!   endif 
-
-
-!   if( TRANSLAT_INV ) then 
-!     print*, "Translational invariance of probability tables not implemented yet."
-!     print*, "Exiting ..."
-!     stop
-
-!   endif 
-
-!   ! number of lattice sites 
-!   n = size(J_interaction_matrix, 1)
-!   if( n /= S%Nsites ) then 
-!     print*, "ERROR: init_probtables(): n /= S%Nsites "
-!     stop
-!   endif 
-
-!   ! Hamiltonian matrix elements on the computational, i.e. the Sz - basis
-!   ! Matrix elements have only two values, TWO*abs(J_ij) and hx:
-!   ! The factor TWO is not necessary if a bond can be represented both as (i1, j1) and (j1, i1),
-!   ! which is the choice taken in this code.  
-!   M_ij(:,:) = dabs(J_interaction_matrix(:,:)) ! TWO*dabs(J_interaction_matrix(:,:)) 
-
-!   do ir=1,n
-!     M_ij(ir,ir) = hx
-!   enddo
-
-! ! 1. The constants which have been added to the Hamiltonian artificially have to be
-! ! subtracted from the energy in the end.
-! ! 2. Sum over all matrix elements used in the transition probabilities 
-! ! when deciding whether to insert or remove an operator
-
-! cc = n*hx
-! ss = n*hx
-! do ir=1, n
-!   do jr=1, ir-1 ! avoid double counting and count only ir.ne.jr
-!     cc = cc + abs(J_interaction_matrix(ir,jr)) 
-!     ss = ss + TWO*abs(J_interaction_matrix(ir,jr))
-!   enddo
-! enddo
-
-! ! see Ref. [1]
-! if (trim(S%lattice_type) == "triangular") then 
-!   ! Triangular lattice 
-!   cc = cc + (3.0_dp/2.0_dp) * abs(J_1) * n_plaquettes
-! elseif (trim(S%lattice_type) == "kagome") then 
-!   ! Kagome lattice 
-!   cc = cc + 3.0_dp * abs(J_1) * n_plaquettes
-! else
-!   stop "init_probtables(): Unknown lattice type."
-! endif 
-
-! probtable%consts_added = cc
-! probtable%sum_all_diagmatrix_elements_2or4leg = ss 
-! ! include matrix elements from triangular plaquettes (of the Hamiltonian shifted by the constants)
-! if (trim(S%lattice_type) == "triangular") then 
-!   probtable%sum_all_diagmatrix_elements = ss + 2.0_dp * abs(J_1) * n_plaquettes
-! elseif (trim(S%lattice_type) == "kagome") then 
-!   probtable%sum_all_diagmatrix_elements = ss + 4.0_dp * abs(J_1) * n_plaquettes
-! else
-!   stop "init_probtables(): Unknown lattice type."
-! endif 
-! probtable%prob_2or4leg = probtable%sum_all_diagmatrix_elements_2or4leg &
-!                           / probtable%sum_all_diagmatrix_elements
-
-! ! Calculate the cumulative probability tables used in the diagonal update
-! ! for the insertion of diagonal 2leg and 4leg vertices. 
-! allocate(probtable%P_cumulfirst(n))
-! allocate(probtable%P_cumulsecond(n,n))
-
-! do ir = 1, n
-!   P_first(ir) = 0.0_dp; probtable%P_cumulfirst(ir) = 0.0_dp
-!   do k = 1, n
-!     probtable%P_cumulsecond(ir,k) = 0.0_dp
-!   enddo
-! enddo
-
-! ! probabilities for selecting the first index of an Ising/constant operator
-! ! relative probability for selecting index i:
-! do ir = 1, n
-!   P_first(ir) = sum(abs(M_ij(ir,:)))
-! enddo
-
-! ! cumulative probabilities used in the heat bath algorithm
-! norm = sum(P_first(:))
-! do k = 1, n 
-!   do ir = 1, k
-!     probtable%P_cumulfirst(k) = probtable%P_cumulfirst(k) + P_first(ir)
-!   enddo
-!   probtable%P_cumulfirst(k) = probtable%P_cumulfirst(k)/norm 
-! enddo
-
-! ! The relative probability for choosing j as the second index given i as the first index
-! ! is M_ij (conditional probability). 
-! do ir = 1, n  
-!   do k = 1, n
-!     do jr = 1, k
-!       probtable%P_cumulsecond(ir,k) = probtable%P_cumulsecond(ir,k) + abs(M_ij(ir,jr))
-!     enddo
-!   enddo
-! enddo
-
-! !normalize
-! do ir = 1, n
-!   norm = 0.0_dp
-!   do jr = 1, n
-!     norm = norm + abs(M_ij(ir,jr))
-!   enddo
-!   do k = 1, n
-!     probtable%P_cumulsecond(ir,k) = probtable%P_cumulsecond(ir,k) / norm
-!   enddo
-! enddo
-
-
-! end subroutine 
 
 subroutine init_probtables( S, J_interaction_matrix, hx, &
   probtable, J_1, n_plaquettes, TRANSLAT_INV )

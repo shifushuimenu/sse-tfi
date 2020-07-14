@@ -59,7 +59,7 @@
 ! ========================================================
 &SIMPARAMS
 J_1 		= 1.0  ! +1.0
-hx  		= 0.1   ! hx > 0 required
+hx  		= 0.5  ! hx > 0 required
 temp 		= 0.1
 nx   		= 3
 ny   		= 3
@@ -71,7 +71,7 @@ translat_invar = T
 ntherm_step = 1000
 nmeas_step  = 10000
 Nbin        = 10
-paramscan   = "paramscan_T"
+paramscan   = "parampoint"
 scan_min    = 0.3
 scan_max    = 10
 heavy_use   = F
