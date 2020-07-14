@@ -2,6 +2,9 @@
 !   Bravais lattice of the kagome lattice as for the ordinary kagome lattice.
 !   (use pbc() function)
 ! TODO: Initialize enlarged structure S for the triangular lattice. 
+! Check that everywhere this version is used: 
+!         subj = mod(j-1, S%Nbasis) + 1
+! Add assert for translate_from_origin() and translate_to_origin()
 
 module lattice 
 use SSE_configuration, only: t_Plaquette
@@ -538,7 +541,7 @@ END SUBROUTINE unit_test_triangular
 
 
 ! IMPROVE: make this a pure function 
-pure integer function pbc(nr,l)
+integer function pbc(nr,l)
 ! ==============================================
 ! periodic boundary conditions in one dimension 
 ! ==============================================
@@ -551,12 +554,12 @@ pure integer function pbc(nr,l)
   pbc = nr
   if (nr.gt.l-1) pbc = nr - l
   if (nr.lt.0) pbc = nr + l
-  ! if ((nr.ge.2*l).or.(nr.lt.-l)) then 
-  !    print*, "Error in function pbc(nr,l)"
-  !    print*, "invalid arguments: nr=", nr, "l=", l
-  !    print*, "Exiting..."
-  !    stop
-  ! endif 
+  if ((nr.ge.2*l).or.(nr.lt.-l)) then 
+     print*, "Error in function pbc(nr,l)"
+     print*, "invalid arguments: nr=", nr, "l=", l
+     print*, "Exiting..."
+     stop
+  endif 
 end function pbc    
 
 
@@ -852,8 +855,8 @@ subroutine make_translat_invar( S, J_interaction_matrix, J_translat_invar )
  
 end subroutine make_translat_invar
 
-
-pure function translate_to_origin(S, i, j) result(r)
+! IMPROVE: make this a pure function 
+function translate_to_origin(S, i, j) result(r)
   implicit none 
 ! Purpose:
 ! ========
@@ -874,8 +877,9 @@ pure function translate_to_origin(S, i, j) result(r)
 ! 
 !   This subroutine should be generic for any lattice structure S. 
 !
-! Usage:
-! ======
+! Usage: Indexing into a translationally invariant interaction matrix. 
+! ====== to get the sign of the interactions. 
+!
 !      Jsign_transinvar = make_translat_invar_kagome( J_sign )
 !      sign = Jsign_transinvar( translate_kagome(i,j) )
 ! 
@@ -889,7 +893,7 @@ pure function translate_to_origin(S, i, j) result(r)
 
 ! ... Local variables ...
   integer :: iB, jB
-  integer :: ixB, iyB, jxB, jyB, subi, subj
+  integer :: ixB, iyB, jxB, jyB
 
 ! ... Executable ...
 ! Linearly stored Bravais site indices start at zero. 
@@ -903,13 +907,53 @@ pure function translate_to_origin(S, i, j) result(r)
 
 ! Bravais distance ( linearly stored index )
   r(1) = pbc(jxB-ixB, S%Nx_bravais) + pbc(jyB-iyB, S%Nx_bravais) * S%Nx_Bravais
-! sublattice "difference" ( for a Bravais lattice, r(2) = 1 )
-  subi = mod(i, S%NBasis) + 1
-  subj = mod(j, S%Nbasis) + 1
-
-  r(2) = subi + S%Nbasis * (subj -1)
+! sublattice "distance" ( for a Bravais lattice, r(2) = 1 )
+  r(2) = sublattice_distance(S, i, j)
 
 end function translate_to_origin   
+
+! IMPROVE: make this a pure function 
+function translate_from_origin( S, i, j) result(k)
+! Input: index2, which is relative to the origin 
+! Return index2 such that it is relative to index 1. 
+  type(Struct), intent(in) :: S
+  integer, intent(in) :: i, j 
+  integer :: k
+
+! ... Local variables ...
+  integer :: iB, jB
+  integer :: ixB, iyB, jxB, jyB  
+  integer :: d, subj
+
+! Linearly stored Bravais site indices start at zero. 
+  iB = (i-1) / S%Nbasis
+  jB = (j-1) / S%Nbasis
+! Bravais coordinates of sites i and j 
+  ixB = mod(iB, S%Nx_bravais)
+  iyB = iB / S%Nx_bravais
+  jxB = mod(jB, S%Nx_bravais)
+  jyB = jB / S%Nx_bravais  
+
+  d = pbc(jxB+ixB, S%Nx_bravais) + pbc(jyB+iyB, S%Nx_bravais) * S%Nx_Bravais  
+  subj = mod(j-1, S%Nbasis) + 1
+
+  ! linearly stored index after translation from `i`
+  k = d * S%Nbasis + subj
+
+end function translate_from_origin
+
+
+pure function sublattice_distance(S, i, j) result(d)
+  type(Struct), intent(in) :: S 
+  integer, intent(in) :: i, j
+  integer :: d
+  integer :: subi, subj 
+
+  subi = mod(i-1, S%NBasis) + 1
+  subj = mod(j-1, S%Nbasis) + 1
+  d = subi + S%Nbasis * (subj -1)
+
+end function sublattice_distance
 
 subroutine momentum_grid_triangular_Bravais(S, Kgrid)
   ! Purpose:

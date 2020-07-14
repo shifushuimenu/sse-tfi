@@ -337,7 +337,7 @@ program ssetfi
             Jij_sign = 0
         endwhere        
     else ! not translationally invariant system (e.g. for disorder realization)
-        allocate( Jij_sign(S%Nsites, S%Nsites) )
+        allocate( Jij_sign(1:S%Nsites, 1:S%Nsites) )
         where( J_interaction_matrix > 0 )
             Jij_sign = +1
         elsewhere( J_interaction_matrix < 0 )
