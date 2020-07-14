@@ -132,7 +132,7 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
 
     if (index1.ne.index2) then	!Ising operator, index1 and index2 not equal 0 by construction
       ! for translationally invariant system 
-      r = translate_kagome( S, index1, index2 ) ! IMPROVE: so far, only kagome 
+      r = translate_to_origin( S, index1, index2 ) ! IMPROVE: so far, only kagome 
       if ( Jij_sign(r(1), r(2)).gt.0 ) then !AFM
         if (spins2(index1).ne.spins2(index2)) then
           OP_INSERTED = .TRUE.
