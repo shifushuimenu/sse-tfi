@@ -1,7 +1,7 @@
 0. Clean up lattice structure (object oriented design ?) and use the triangular Bravais 
    lattice for constructing the kagome lattice. 
 1. Treat translationally invariant systems (with or without a unit cell) 
-   differently to reduce memory consumption. 
+   differently to reduce memory consumptiom (DONE). 
 2. Crystallographic fast Fourier transform 
 3. Clean up single-site cluster update (may be useful when other algorithms fail, e.g. for spin glasses).
 4. Calculate autocorrelslation times. (DONE)
@@ -10,3 +10,4 @@
 6. Implement assert routine, pass an optional parameter to each routine to enable/disable the checks.  
 7. Replace if clauses by boolean arithmetic as much as possible (in optype function and other 
    places in innermost loops)
+8. Alias method for speeding up the diagonal update.   
