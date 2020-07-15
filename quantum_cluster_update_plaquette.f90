@@ -127,7 +127,6 @@ pure function operator_type(op) result(t)
     elseif( op%i == 0) then 
         t = IDENTITY    
     endif 
-       
 
 end function operator_type 
         
