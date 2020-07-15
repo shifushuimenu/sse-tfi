@@ -75,6 +75,6 @@ paramscan   = "parampoint"
 scan_min    = 0.3
 scan_max    = 10
 heavy_use   = F
-deterministic = F
+deterministic = T
 / 
 ! Slash terminates namelist statement. DO NOT REMOVE 
