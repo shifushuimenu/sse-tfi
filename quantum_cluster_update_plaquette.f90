@@ -44,7 +44,7 @@ pure function gleg_to_ir(op, gleg) result(ir)
     vleg = mod(gleg-1, MAX_GHOSTLEGS) + 1
     vleg_mod = mod(vleg-1, MAX_GHOSTLEGS/2) + 1
     
-    select case( operator_type(op) )
+    select case( op%optype )
         case(TRIANGULAR_PLAQUETTE)
             if( vleg_mod == A_LEG ) then
                 ir = -op%i
@@ -95,43 +95,43 @@ pure function leg_direction(gleg) result(dir)
 end function leg_direction 
         
 
-pure function operator_type(op) result(t)
-    implicit none 
-    type(t_BondOperator), intent(in) :: op
-    integer :: t
+! pure function operator_type(op) result(t)
+!     implicit none 
+!     type(t_BondOperator), intent(in) :: op
+!     integer :: t
           
-    ! if( op%i == 0) then 
-    !     t = IDENTITY
-    ! elseif( op%i < 0 ) then         
-    !     t = TRIANGULAR_PLAQUETTE
-    ! elseif( op%i > 0) then 
-    !     if( op%j == 0) then
-    !         t = SPIN_FLIP        
-    !     elseif( op%j == op%i ) then 
-    !         t = CONSTANT     
-    !     elseif( op%j > op%i ) then 
-    !         t = ISING_BOND
-    !     endif 
-    ! endif 
+!     ! if( op%i == 0) then 
+!     !     t = IDENTITY
+!     ! elseif( op%i < 0 ) then         
+!     !     t = TRIANGULAR_PLAQUETTE
+!     ! elseif( op%i > 0) then 
+!     !     if( op%j == 0) then
+!     !         t = SPIN_FLIP        
+!     !     elseif( op%j == op%i ) then 
+!     !         t = CONSTANT     
+!     !     elseif( op%j > op%i ) then 
+!     !         t = ISING_BOND
+!     !     endif 
+!     ! endif 
             
-    ! ! different order of if-clauses
-    ! if( op%i > 0) then 
-    !     if( op%j == 0) then
-    !         t = SPIN_FLIP        
-    !     elseif( op%j == op%i ) then 
-    !         t = CONSTANT     
-    !     elseif( op%j > op%i ) then 
-    !         t = ISING_BOND
-    !     endif 
-    ! elseif( op%i < 0 ) then         
-    !     t = TRIANGULAR_PLAQUETTE        
-    ! elseif( op%i == 0) then 
-    !     t = IDENTITY    
-    ! endif 
+!     ! ! different order of if-clauses
+!     ! if( op%i > 0) then 
+!     !     if( op%j == 0) then
+!     !         t = SPIN_FLIP        
+!     !     elseif( op%j == op%i ) then 
+!     !         t = CONSTANT     
+!     !     elseif( op%j > op%i ) then 
+!     !         t = ISING_BOND
+!     !     endif 
+!     ! elseif( op%i < 0 ) then         
+!     !     t = TRIANGULAR_PLAQUETTE        
+!     ! elseif( op%i == 0) then 
+!     !     t = IDENTITY    
+!     ! endif 
 
-    t = op%optype 
+!     t = op%optype 
 
-end function operator_type 
+! end function operator_type 
         
 subroutine quantum_cluster_update_plaquette( &
     spins, opstring, vertexlink, leg_visited, config )
@@ -288,7 +288,7 @@ do while( LEGS_TO_BE_PROCESSED )
 
 #ifdef DEBUG_CLUSTER_UPDATE
 ! Output the SSE configuration after each Swendsed-Wang cluster construction
-    call  output_SSE_config(config, opstring, spins, visited_ip, filename="SSEconfig.dat")
+    ! call output_SSE_config(config, opstring, spins, visited_ip, filename="SSEconfig.dat")
 #endif 
 
 enddo
@@ -316,7 +316,7 @@ enddo
 #ifdef DEBUG_CLUSTER_UPDATE
 ! Output the final SSE configuration after all custers have been built
 ! and after the initial spin configuration has been updated.
-    call  output_SSE_config(config, opstring, spins, visited_ip, filename="SSEconfig.dat")
+    ! call  output_SSE_config(config, opstring, spins, visited_ip, filename="SSEconfig.dat")
 #endif 
 
 #ifdef DEBUG_CLUSTER_UPDATE    
