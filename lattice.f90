@@ -939,7 +939,7 @@ function translate_from_origin( S, i, j) result(k)
 
   ! linearly stored index after translation from `i`
   k = d * S%Nbasis + subj
-
+  
 end function translate_from_origin
 
 
