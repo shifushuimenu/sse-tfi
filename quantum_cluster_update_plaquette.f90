@@ -114,19 +114,22 @@ pure function operator_type(op) result(t)
     !     endif 
     ! endif 
             
-    if( op%i > 0) then 
-        if( op%j == 0) then
-            t = SPIN_FLIP        
-        elseif( op%j == op%i ) then 
-            t = CONSTANT     
-        elseif( op%j > op%i ) then 
-            t = ISING_BOND
-        endif 
-    elseif( op%i < 0 ) then         
-        t = TRIANGULAR_PLAQUETTE        
-    elseif( op%i == 0) then 
-        t = IDENTITY    
-    endif 
+    ! ! different order of if-clauses
+    ! if( op%i > 0) then 
+    !     if( op%j == 0) then
+    !         t = SPIN_FLIP        
+    !     elseif( op%j == op%i ) then 
+    !         t = CONSTANT     
+    !     elseif( op%j > op%i ) then 
+    !         t = ISING_BOND
+    !     endif 
+    ! elseif( op%i < 0 ) then         
+    !     t = TRIANGULAR_PLAQUETTE        
+    ! elseif( op%i == 0) then 
+    !     t = IDENTITY    
+    ! endif 
+
+    t = op%optype 
 
 end function operator_type 
         
@@ -553,6 +556,7 @@ elseif( (i1.ne.0).and.(i2.eq.0) ) then
     if (FLIPPING) then
         opstring(ip)%i = i1
         opstring(ip)%j = i1
+        opstring(ip)%optype = CONSTANT 
     endif    
 
 elseif( (i1.ne.0).and.(i2.eq.i1) ) then
@@ -567,6 +571,7 @@ elseif( (i1.ne.0).and.(i2.eq.i1) ) then
     if (FLIPPING) then
         opstring(ip)%i = i1
         opstring(ip)%j = 0
+        opstring(ip)%optype = SPIN_FLIP
     endif
 else
     print*, "cluster update: strange operator detected"

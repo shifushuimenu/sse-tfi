@@ -33,6 +33,7 @@ module SSE_configuration
     ! Plaquette operators are signalled by i<0, j<0.
     integer :: k  ! for triangular plaquette operators abs(i) = ir_A, abs(j) = ir_B, abs(k) = ir_C 
                   ! denote the three linearly stored sites on which the plaquette sits
+    integer :: optype ! for quickly determining operator type (directly, rather than from i,j,and k)
     logical :: PRIVILEGED_LEG_IS_MAJORITY_LEG   ! true if the privileged leg sits on a majority spin configuration               
     ! The privileged site is always the 'A-site'. The lower leg on the 'A-site' always 
     ! has the lowest leg index around the vertex. To which sublattice an 'A-site' belongs

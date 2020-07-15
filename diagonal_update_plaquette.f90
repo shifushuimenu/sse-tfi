@@ -153,6 +153,7 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
             opstring(ip)%i = index2
             opstring(ip)%j = index1
           endif
+          opstring(ip)%optype = ISING_BOND
           ! 	Expansion order changes as n_exp -> n_exp + 1
 #ifdef DEBUG_DIAGONAL_UPDATE
     print*, "insert an AFM Ising operator"
@@ -174,6 +175,7 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
             opstring(ip)%i = index2
             opstring(ip)%j = index1
           endif
+          opstring(ip)%optype = ISING_BOND
 #ifdef DEBUG_DIAGONAL_UPDATE
     print*, "insert an FM Ising operator"
 #endif             
@@ -190,6 +192,7 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
         OP_INSERTED = .TRUE.
         opstring(ip)%i = index1
         opstring(ip)%j = index2
+        opstring(ip)%optype = CONSTANT
 #ifdef DEBUG_DIAGONAL_UPDATE
   print*, "insert a const. operator"
 #endif 
@@ -243,6 +246,7 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
      opstring(ip)%i = -ir_A  
      opstring(ip)%j = -ir_B
      opstring(ip)%k = -ir_C
+     opstring(ip)%optype = TRIANGULAR_PLAQUETTE
      
      ! Is the A-site a majority site ?
      if (spins2(ir_B).ne.spins2(ir_C)) then
@@ -280,6 +284,7 @@ endif !identity encountered
     if (prob <= P_minus) then
       opstring(ip)%i = 0
       opstring(ip)%j = 0
+      opstring(ip)%optype = IDENTITY 
 #ifdef DEBUG_DIAGONAL_UPDATE
   print*, "remove a diagonal operator"
 #endif                 
@@ -640,6 +645,7 @@ subroutine extend_cutoff(opstring, config)
       ! insert an additional identity
       opstring_new(ip)%i = 0
       opstring_new(ip)%j = 0
+      opstring_new(ip)%optype = IDENTITY
     else  ! carry over the old operator string
       opstring_new(ip) = opstring(n)
       n = n + 1

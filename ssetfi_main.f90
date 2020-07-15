@@ -87,6 +87,7 @@ subroutine init_SSEconfig_hostart( S, LL, config, &
     allocate(opstring(LL))
     do ip=1, LL
         opstring(ip)%i = 0; opstring(ip)%j = 0; opstring(ip)%k = 0
+        opstring(ip)%optype = IDENTITY
     enddo 
     allocate( spins(S%Nsites) )
     
