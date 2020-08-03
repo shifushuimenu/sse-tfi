@@ -8,6 +8,6 @@
 5. Make sure all subroutines display their theoretically expected scaling of runtime 
    with input size. 
 6. Implement assert routine, pass an optional parameter to each routine to enable/disable the checks.  
-7. Replace if clauses by boolean arithmetic as much as possible (in optype function and other 
-   places in innermost loops)
+7. Replace if clauses by boolean arithmetic as much as possible.
+   Replace conditions for operator types by op%optype.
 8. Alias method for speeding up the diagonal update.   
