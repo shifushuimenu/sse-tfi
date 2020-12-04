@@ -19,8 +19,8 @@
 !   sites in the motif of the lattice, e.g. for the kagome
 !   lattice set n_sites = nx*ny*3. 
 ! lattice_type = ["triangular", "kagome"]
-!   Underlying lattice for which a plaquette update should 
-!   be used.     
+!   Underlying lattice structure. For "triangular" and "kagome" lattices
+!   the Biswas-Rakala-Damle plaquette update will be used.     
 ! Jmatrix_file = "Jmatrix.txt":
 !   Name of the file where the interaction matrix `Jmatrix(:,:)`
 !   of shape (n_sites*n_basis, n_sites*n_basis) is stored. 
@@ -61,9 +61,9 @@
 J_1 		= 1.0  ! +1.0
 hx  		= 1.0  ! hx > 0 required
 temp 		= 0.1
-nx   		= 6
-ny   		= 6
-n_sites 	= 36
+nx   		= 3
+ny   		= 3
+n_sites 	= 9
 lattice_type = "triangular"
 ignore_Jmatrix = T
 Jmatrix_file = "J3x3_inplane.txt"  !"Jmatrix_nnFM.dat" !"Jmatrix_kagome2x2_FM.dat"  !"Jmatrix_nnFM.dat" 
@@ -71,9 +71,9 @@ translat_invar = T
 ntherm_step = 1000
 nmeas_step  = 10000
 Nbin        = 10
-paramscan   = "parampoint"
-scan_min    = 0.3
-scan_max    = 10
+paramscan   = "paramscan_hx"
+scan_min    = 0.1
+scan_max    = 2.0
 heavy_use   = F
 deterministic = T
 / 

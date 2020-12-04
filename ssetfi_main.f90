@@ -177,6 +177,8 @@ program ssetfi
     MPI_size = 1
 #endif 
     write(chr_rank, "(i5.5)") MPI_rank
+    ! Check the MPI works correctly
+    print*, "My MPI_rank is rank=", MPI_rank, "of size=", MPI_size
 
 
     OPEN( UNIT=5, FILE='simparams.in', ACTION="read", STATUS="old", IOSTAT=ioerr)
