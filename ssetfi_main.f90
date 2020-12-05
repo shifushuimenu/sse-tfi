@@ -177,7 +177,7 @@ program ssetfi
     MPI_size = 1
 #endif 
     write(chr_rank, "(i5.5)") MPI_rank
-    ! Check the MPI works correctly
+    ! Check that MPI works correctly
     print*, "My MPI_rank is rank=", MPI_rank, "of size=", MPI_size
 
 
@@ -187,6 +187,13 @@ program ssetfi
     READ(5, NML=SIMPARAMS)
 
     ! TODO: Check input parameters ...
+    if( J_1==0 .and. ignore_Jmatrix ) then 
+        print*, "INCONSISTENT INPUT:"
+        print*, "You set `J_1=0` and `ignore_Jmatrix=.true.`. This means that the interactions"
+        print*, "are all set to zero, which is probably not what you want."
+        print*, "Exiting ..."
+        stop
+    endif 
 
     if(trim(paramscan) == "parampoint") then 
         print*, "Simulating hx=", hx, "temp=", temp
@@ -249,7 +256,7 @@ program ssetfi
     else
         if (MPI_rank == root_rank) then 
             open(100, file=trim(Jmatrix_file), action="read", status="old")
-            print*, "reading ", Jmatrix_file
+            print*, "reading Jmatrix_file", Jmatrix_file
             do i=1,S%Nsites
                 read(100, *) J_interaction_matrix(i,1:S%Nsites)
             enddo

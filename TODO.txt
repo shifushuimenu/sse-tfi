@@ -4,10 +4,15 @@
    differently to reduce memory consumptiom (DONE). 
 2. Crystallographic fast Fourier transform 
 3. Clean up single-site cluster update (may be useful when other algorithms fail, e.g. for spin glasses).
-4. Calculate autocorrelslation times. (DONE)
+4. Calculate autocorrelation times. (DONE)
 5. Make sure all subroutines display their theoretically expected scaling of runtime 
    with input size. 
 6. Implement assert routine, pass an optional parameter to each routine to enable/disable the checks.  
 7. Replace if clauses by boolean arithmetic as much as possible.
    Replace conditions for operator types by op%optype.
-8. Alias method for speeding up the diagonal update.   
+8. Use alias method for speeding up the diagonal update.   
+9. Make contruction of linked list generic (for differently sized plaquettes, by using MAX_GHOSTLEGS 
+   and MAX_GHOSTLEGS_HALF rather than numeric values)
+10. Include a site-dependent longitudinal field. This requires small hanges to 
+   diagonal update and substantial changes to the multibranch cluster update
+   because of cluster cannot always be flipped. 

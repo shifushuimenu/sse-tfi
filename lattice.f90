@@ -492,14 +492,14 @@ SUBROUTINE unit_test_triangular(testfile)
    ! and create variables for 'expected' results, which
    ! are read from a testfile. 
    INTEGER :: nx, ny
-   INTEGER, ALLOCATABLE :: neigh(:,:), neigh_exp(:,:)
-   INTEGER, ALLOCATABLE :: sublattice(:), sublattice_exp(:)
-   TYPE (t_Plaquette), ALLOCATABLE :: plaquettes(:), plaquettes_exp(:)      
+   INTEGER, ALLOCATABLE :: neigh(:,:), neigh_expected(:,:)
+   INTEGER, ALLOCATABLE :: sublattice(:), sublattice_expected(:)
+   TYPE (t_Plaquette), ALLOCATABLE :: plaquettes(:), plaquettes_expected(:)      
    TYPE (Struct) :: S
    ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
    
    NAMELIST /PARAMS/ nx, ny
-   NAMELIST /DATASTRUCTURES/ neigh_exp, sublattice_exp, plaquettes_exp
+   NAMELIST /DATASTRUCTURES/ neigh_expected, sublattice_expected, plaquettes_expected
 
                
    IF( PRESENT(testfile) ) THEN
@@ -516,9 +516,9 @@ SUBROUTINE unit_test_triangular(testfile)
    READ(5, NML=PARAMS)
 
    ! generated values           ; ! expected values read from file
-   ALLOCATE(neigh( 0:6, nx*ny )); ALLOCATE(neigh_exp( 0:6, nx*ny ))
-   ALLOCATE(sublattice( nx*ny )); ALLOCATE(sublattice_exp( nx*ny ))
-   ALLOCATE(plaquettes( nx*ny )); ALLOCATE(plaquettes_exp( nx*ny ))
+   ALLOCATE(neigh( 0:6, nx*ny )); ALLOCATE(neigh_expected( 0:6, nx*ny ))
+   ALLOCATE(sublattice( nx*ny )); ALLOCATE(sublattice_expected( nx*ny ))
+   ALLOCATE(plaquettes( nx*ny )); ALLOCATE(plaquettes_expected( nx*ny ))
            
    !~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~        
    ! routine to be checked: Generate data structures and compare with 
@@ -533,9 +533,15 @@ SUBROUTINE unit_test_triangular(testfile)
    CLOSE(5)
    
    ! compare
-   IF( ALL(neigh == neigh_exp) .AND. &
-       ALL(sublattice == sublattice_exp) .AND. &
-       ALL(compare(plaquettes, plaquettes_exp)) ) PRINT*, "Test passed. Done."
+   IF( ALL(neigh == neigh_expected) &
+       .and. ALL(sublattice == sublattice_expected) &
+       .and. ALL(compare(plaquettes, plaquettes_expected)) ) then 
+       PRINT*, "Test passed. Done."
+   else
+       print*, neigh == neigh_expected
+       print*, sublattice == sublattice_expected
+       print*, "Some tests did not pass."
+   endif 
           
 END SUBROUTINE unit_test_triangular        
 
@@ -843,6 +849,7 @@ subroutine make_translat_invar( S, J_interaction_matrix, J_translat_invar )
              > epsilon(1.0_4) ) then 
         print*, "Error: make_translat_invar_kagome(): interaction matrix is not"
         print*, "       translationally invariant."
+        print*, "J_translat_invar( r(1), r(2) ), J_interaction_matrix( ir, jr ) = ..."
         print*, J_translat_invar( r(1), r(2) ), J_interaction_matrix( ir, jr )
         stop
       endif 

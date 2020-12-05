@@ -4,7 +4,7 @@ module SSE_configuration
     ! labelling of legs 
     integer, parameter :: MAX_GHOSTLEGS = 6
     integer, parameter :: MAX_GHOSTLEGS_HALF = MAX_GHOSTLEGS / 2
-    ! operator types 
+    ! operator types; integer codes must be distinct  
     integer, parameter :: IDENTITY = 100
     integer, parameter :: ISING_BOND = 10
     integer, parameter :: TWO_LEG = 20, SPIN_FLIP = 21, CONSTANT = 22

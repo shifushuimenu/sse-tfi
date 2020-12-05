@@ -22,7 +22,7 @@ subroutine measure_SzSzTimeCorr(Matsu, Kgrid, config, S, &
 ! Purpose:
 ! --------
 ! Compute dynamical correlation functions in Matsubara frequency space.
-! (via "embedding of SSE configuration in imaginary tme")
+! (via "embedding of SSE configuration in imaginary time")
 
 ! Method:
 ! -------
