@@ -48,7 +48,8 @@ subroutine build_linkedlist_plaquette( &
 !---------------------------------------------------------------!
 implicit none 
 
-! automatic array 
+! Parameters:
+! -----------
 type(t_BondOperator), intent(in) :: opstring(:)
 type(t_Config), intent(in) :: config  
 integer, allocatable, intent(out) :: vertexlink(:)
@@ -60,7 +61,9 @@ integer :: lastleg( config%n_sites )
 
 integer :: i, ip, i1, i2, leg_counter
 integer :: ir_A, ir_B, ir_C
+integer :: optype, opcategory
 
+! ... Executable ...
 if( allocated(vertexlink) ) deallocate(vertexlink)
 allocate(vertexlink(config%n_ghostlegs))
 if( allocated(leg_visited) ) deallocate(leg_visited)
@@ -84,137 +87,143 @@ do ip=1, config%LL
 ! Determine the type of vertex.
   i1 = opstring(ip)%i  
   i2 = opstring(ip)%j
+  optype= opstring(ip)%optype
 
-! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-! Identity operator encountered
-! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-if((i1 == 0) .and. (i2 == 0)) then 
-  ! necessary for the mapping leg_number -> ip
-  leg_visited(leg_counter+1:leg_counter+MAX_GHOSTLEGS) = .TRUE.
-  leg_counter = leg_counter + MAX_GHOSTLEGS
-endif 
-
-! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-! Six-leg vertex, i.e.
-! triangular plaquette operator encountered
-! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-if (i1.lt.0) then 
-! By construction the opstring(ip) structure components %i, %j, and %k 
-! contain the linearly stored site index of the A-site, B-site, and C-site, 
-! respectively. 
-   ir_A = abs(i1)
-   ir_B = abs(i2)
-   ir_C = abs(opstring(ip)%k)
-
-   ! lower three legs 
-   if (lastleg(ir_A).ne.0) then
-   ! double-linked list
-       ! A-site always has lowest leg number on a triangular plaquette 
-       vertexlink(lastleg(ir_A)) = leg_counter + 1 
-       vertexlink(leg_counter + 1) = lastleg(ir_A)
-   else
-       firstleg(ir_A) = leg_counter + 1
-   endif
-      
-   if (lastleg(ir_B).ne.0) then
-       vertexlink(lastleg(ir_B)) = leg_counter + 2
-       vertexlink(leg_counter + 2) = lastleg(ir_B)
-   else
-       firstleg(ir_B) = leg_counter + 2
-   endif
-   
-   if (lastleg(ir_C).ne.0) then
-       vertexlink(lastleg(ir_C)) = leg_counter + 3
-       vertexlink(leg_counter + 3) = lastleg(ir_C)
-   else
-       firstleg(ir_C) = leg_counter + 3
-   endif   
-    
-   ! upper three legs 
-   lastleg(ir_A) = leg_counter + 4
-   lastleg(ir_B) = leg_counter + 5
-   lastleg(ir_C) = leg_counter + 6
-   leg_counter = leg_counter + MAX_GHOSTLEGS   
-endif
-  
-! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-! Four-leg vertex, i.e.  
-! Ising operator between i1 and i2
-! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-if ( (i1.gt.0).and.(i2.gt.0).and.(i1.ne.i2) ) then 
-! ! IMPROVE: IF( (i1>0) .and. (i2>i1) ) THEN 
-#ifdef DEBUG
-  ! Check whether i1 < i2:
-  if (i1.gt.i2) then
-    print*,'Error: i1 > i2 => exiting'
+  if( optype == IDENTITY) then 
+    opcategory = IDENTITY 
+  elseif( (optype == SPIN_FLIP) .or. (optype == CONSTANT) .or. (optype == LONGITUDINAL) ) then 
+    opcategory = TWO_LEG  
+  elseif( (optype == ISING_BOND) ) then 
+    opcategory = FOUR_LEG
+  elseif( (optype == TRIANGULAR_PLAQUETTE) ) then 
+    opcategory = SIX_LEG
+  else
+    print*, "ERROR: linked list: strange operator detected"
+    print*, "optype=", optype
+    print*, "Exiting ..."
     stop
-  endif
+  endif 
+  ! ... add larger plaquette operators here ...
+
+  link_legs_opcategory: select case( opcategory )
+    case( IDENTITY )
+      ! necessary for the mapping leg_number -> ip
+      leg_visited(leg_counter+1:leg_counter+MAX_GHOSTLEGS) = .TRUE.
+      leg_counter = leg_counter + MAX_GHOSTLEGS
+
+    case( SIX_LEG )
+    ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    ! Six-leg vertex, i.e.
+    ! triangular plaquette operator encountered
+    ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    ! By construction the opstring(ip) structure components %i, %j, and %k 
+    ! contain the linearly stored site index of the A-site, B-site, and C-site, 
+    ! respectively. 
+      ir_A = abs(i1)
+      ir_B = abs(i2)
+      ir_C = abs(opstring(ip)%k)
+
+      ! lower three legs 
+      if (lastleg(ir_A).ne.0) then
+      ! double-linked list
+          ! A-site always has lowest leg number on a triangular plaquette 
+          vertexlink(lastleg(ir_A)) = leg_counter + 1 
+          vertexlink(leg_counter + 1) = lastleg(ir_A)
+      else
+          firstleg(ir_A) = leg_counter + 1
+      endif
+          
+      if (lastleg(ir_B).ne.0) then
+          vertexlink(lastleg(ir_B)) = leg_counter + 2
+          vertexlink(leg_counter + 2) = lastleg(ir_B)
+      else
+          firstleg(ir_B) = leg_counter + 2
+      endif
+      
+      if (lastleg(ir_C).ne.0) then
+          vertexlink(lastleg(ir_C)) = leg_counter + 3
+          vertexlink(leg_counter + 3) = lastleg(ir_C)
+      else
+          firstleg(ir_C) = leg_counter + 3
+      endif   
+        
+      ! upper three legs 
+      lastleg(ir_A) = leg_counter + 4
+      lastleg(ir_B) = leg_counter + 5
+      lastleg(ir_C) = leg_counter + 6
+      leg_counter = leg_counter + MAX_GHOSTLEGS   
+    
+    case( FOUR_LEG )
+    ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    ! Four-leg vertex, i.e.  
+    ! Ising operator between i1 and i2
+    ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#ifdef DEBUG
+      ! Check whether i1 < i2:
+      if (i1.gt.i2) then
+        print*,'Error: i1 > i2 => exiting'
+        stop
+      endif
 #endif    
 
-  ! update linked list 
-  ! lower two legs
-  if (lastleg(i1).ne.0) then 
-     ! double-linked list
-     vertexlink(lastleg(i1)) = leg_counter + 1
-     vertexlink(leg_counter + 1) = lastleg(i1)
-  else
-     firstleg(i1) = leg_counter + 1
-  endif
-  
-  if (lastleg(i2).ne.0) then
-     vertexlink(lastleg(i2)) = leg_counter + 2
-     vertexlink(leg_counter + 2) = lastleg(i2)    
-  else
-     firstleg(i2) = leg_counter + 2
-  endif  
+      ! update linked list 
+      ! lower two legs
+      if (lastleg(i1).ne.0) then 
+        ! double-linked list
+        vertexlink(lastleg(i1)) = leg_counter + 1
+        vertexlink(leg_counter + 1) = lastleg(i1)
+      else
+        firstleg(i1) = leg_counter + 1
+      endif
+      
+      if (lastleg(i2).ne.0) then
+        vertexlink(lastleg(i2)) = leg_counter + 2
+        vertexlink(leg_counter + 2) = lastleg(i2)    
+      else
+        firstleg(i2) = leg_counter + 2
+      endif  
 
-  ! upper two legs
-  ! Note the convention for the labelling of legs 
-  ! around a 4-leg vertex
-  lastleg(i2) = leg_counter + 5
-  lastleg(i1) = leg_counter + 4  
-  ! mark the 'ghostlegs' as 'visited' so that they are 
-  ! not used as starting legs for constructing a cluster
-  ! during the off-diagonal update 
-  leg_visited(leg_counter + 3) = .TRUE.
-  leg_visited(leg_counter + 6) = .TRUE.
-  ! increment leg counter using 'ghostlegs' so that 
-  ! ever vertex is associated with MAX_GHOSTLEGS legs.  
-  leg_counter = leg_counter + MAX_GHOSTLEGS
-endif
+      ! upper two legs
+      ! Note the convention for the labelling of legs 
+      ! around a 4-leg vertex
+      lastleg(i2) = leg_counter + 5
+      lastleg(i1) = leg_counter + 4  
+      ! mark the 'ghostlegs' as 'visited' so that they are 
+      ! not used as starting legs for constructing a cluster
+      ! during the off-diagonal update 
+      leg_visited(leg_counter + 3) = .TRUE.
+      leg_visited(leg_counter + 6) = .TRUE.
+      ! increment leg counter using 'ghostlegs' so that 
+      ! ever vertex is associated with MAX_GHOSTLEGS legs.  
+      leg_counter = leg_counter + MAX_GHOSTLEGS
 
-! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-! Two-leg vertex, i.e.
-! spin-flip operator or constant operator at i1
-! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-IF( (i1 /= 0).and.((i2 == 0).or.(i2 == i1)) ) THEN 
-  ! lower leg
-  IF(lastleg(i1).ne.0) THEN
-    vertexlink(lastleg(i1)) = leg_counter + 1
-    vertexlink(leg_counter + 1) = lastleg(i1)
-  ELSE
-    firstleg(i1) = leg_counter + 1
-  ENDIF  
-  ! upper leg
-  lastleg(i1) = leg_counter + 4  
-  ! mark 'ghostlegs' as 'visited'
-  leg_visited(leg_counter + 2) = .TRUE.
-  leg_visited(leg_counter + 3) = .TRUE.
-  leg_visited(leg_counter + 5) = .TRUE.
-  leg_visited(leg_counter + 6) = .TRUE.
-  leg_counter = leg_counter + MAX_GHOSTLEGS
-ENDIF
+    case( TWO_LEG )
+    ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    ! Two-leg vertex, i.e.
+    ! spin-flip operator or constant operator at i1
+    ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      ! lower leg
+      if( lastleg(i1).ne.0 ) then
+        vertexlink(lastleg(i1)) = leg_counter + 1
+        vertexlink(leg_counter + 1) = lastleg(i1)
+      else
+        firstleg(i1) = leg_counter + 1
+      endif  
+      ! upper leg
+      lastleg(i1) = leg_counter + 4  
+      ! mark 'ghostlegs' as 'visited'
+      leg_visited(leg_counter + 2) = .TRUE.
+      leg_visited(leg_counter + 3) = .TRUE.
+      leg_visited(leg_counter + 5) = .TRUE.
+      leg_visited(leg_counter + 6) = .TRUE.
+      leg_counter = leg_counter + MAX_GHOSTLEGS
 
-#ifdef DEBUG 
-!------------------------------------
-if ((i1.eq.0).and.(i2.ne.0)) then
-  print*, "Error: i1.eq.0 and i2.ne.0"
-  stop
-endif
-!------------------------------------
-#endif
+    case default
+      stop "linked list: strange operator class detected"
 
-enddo
+    end select link_legs_opcategory
+
+enddo ! ip = 1, LL
 
 ! ***************************************
 ! Implement periodic boundary conditions 
@@ -249,7 +258,6 @@ enddo
     stop
   endif 
 #endif 
-
 
 END SUBROUTINE build_linkedlist_plaquette
 

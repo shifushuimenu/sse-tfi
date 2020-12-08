@@ -24,15 +24,15 @@ objects = ${modules} ${ssetfi_objects}
 
 default: all
 
-all: ssetfi 
+all: ssetfi
 
 
-ssetfi: ${objects} ssetfi_main.f90 make.sys.gfortran
+ssetfi: ${objects} ssetfi_main.f90 
 	${F90} ${LFLAGS} ${objects} -o ssetfi ssetfi_main.f90
 
 test_suite: ${objects} test_suite.f90 
 	${F90} ${LFLAGS} ${objects} -o test test_suite.f90 
-.f90.o: 
+.f90.o: make.sys.gfortran
 	${F90} ${FFLAGS} -c $*.f90
 
 clean:

@@ -4,11 +4,19 @@ module SSE_configuration
     ! labelling of legs 
     integer, parameter :: MAX_GHOSTLEGS = 6
     integer, parameter :: MAX_GHOSTLEGS_HALF = MAX_GHOSTLEGS / 2
-    ! operator types; integer codes must be distinct  
+    ! operator types; *all* integer codes must be distinct !
     integer, parameter :: IDENTITY = 100
     integer, parameter :: ISING_BOND = 10
-    integer, parameter :: TWO_LEG = 20, SPIN_FLIP = 21, CONSTANT = 22
+    integer, parameter :: TWO_LEG = 20, SPIN_FLIP = 21, CONSTANT = 22, LONGITUDINAL = 23
     integer, parameter :: TRIANGULAR_PLAQUETTE = 30
+
+    ! used only in the diagonal update when choosing operator classes 
+    ! to be inserted 
+    integer, parameter :: TWOLEGCONST_OR_FOURLEG = 52
+
+    ! used when building the linked list
+    ! ... add larger plaquette operators here ...
+    integer, parameter :: FOUR_LEG = 44, SIX_LEG = 66
 
     type :: t_Config 
     ! Configuration of the simulation cell 
@@ -21,6 +29,7 @@ module SSE_configuration
       integer :: n6leg        ! Number of triangular plaquette (i.e. 6-leg) vertices
       integer :: n4leg        ! Number of Ising (i.e. 4-leg) vertices 
       integer :: n2leg        ! Number of constant or spin-flip (i.e. 2-leg) vertices 
+      integer :: n2leg_hz     ! Number of longitudinal field (hz) vertices
       integer :: n_ghostlegs  ! Total number of all legs, including 'ghostlegs': 
                               !     n_ghostlegs = n_exp * MAX_GHOSTLEGS
     end type  
@@ -31,8 +40,12 @@ module SSE_configuration
     integer :: j
     ! the following variables are only relevant for triangular plaquette operators
     ! Plaquette operators are signalled by i<0, j<0.
-    integer :: k  ! for triangular plaquette operators abs(i) = ir_A, abs(j) = ir_B, abs(k) = ir_C 
-                  ! denote the three linearly stored sites on which the plaquette sits
+    integer :: k  ! For triangular plaquette operators abs(i) = ir_A, abs(j) = ir_B, abs(k) = ir_C 
+                  ! denote the three linearly stored sites on which the plaquette sits.
+                  ! If the bond operator is a longitudinal field operator (hz), 
+                  ! then the structure element `k` is used to store the instantaneous spin state at  
+                  ! that operator, i.e. 
+                  !     opstring(ip)%k = spins(opstring(ip)%i)
     integer :: optype ! for quickly determining operator type (directly, rather than from i,j,and k)
     logical :: PRIVILEGED_LEG_IS_MAJORITY_LEG   ! true if the privileged leg sits on a majority spin configuration               
     ! The privileged site is always the 'A-site'. The lower leg on the 'A-site' always 

@@ -21,7 +21,7 @@ module measurements
     ! Parameter for the indexing of scalar variables 
     integer, parameter :: P0_ENERGY = 1
     integer, parameter :: P0_MAGNETIZATION = 2   ! uniform magnetization per site 
-    integer, parameter :: P0_COPARAM = 3         ! Clock-order parameter (triangular lattice)
+    integer, parameter :: P0_COPARAM = 3         ! clock-order parameter (triangular lattice)
     integer, parameter :: P0_AV_NEXP = 4         ! average expansion order 
     integer, parameter :: P0_AV_NEXP2 = 5        ! average expansion order squared 
     integer, parameter :: P0_SPECIFIC_HEAT = 6   ! specific heat per site 
@@ -394,7 +394,7 @@ module measurements
         P0%meas(P0_AV_NEXP, tmp_idx) = config%n_exp
         P0%meas(P0_AV_NEXP2, tmp_idx) = config%n_exp**2
         ! fluctuation-dissipation quantities are only defined *over* a bin,
-        ! no in a single configuration 
+        ! not in a single configuration 
         P0%meas(P0_SPECIFIC_HEAT, tmp_idx) = 0.0_dp   
 
         ! Accumulate result to P0(:, idx)
@@ -417,13 +417,12 @@ module measurements
             P0%AzBzq_Matsu(:, idx) = P0%AzBzq_Matsu(:, idx) + P0%AzBzq_Matsu(:, tmp_idx)
         endif 
 
-
         P0%cnt = P0%cnt + 1 
 
     end subroutine Phys_Measure
 
 
-    subroutine Phys_Print(P0, Kgrid, S, MatsuGrid, hx, temp, heavy_use)
+    subroutine Phys_Print(P0, Kgrid, S, MatsuGrid, hx, temp, hz, heavy_use)
         use MPI_parallel, only: MPI_rank, chr_rank, root_rank     ! global variables, IMPROVE
         implicit none 
 
@@ -434,16 +433,15 @@ module measurements
         type(Struct), intent(in)      :: S
         type(t_MatsuGrid), intent(in) :: MatsuGrid 
         logical, intent(in)           :: heavy_use
-
-        ! IMPROVE:
-        real(dp), intent(in) :: hx, temp
+        ! IMPROVE: combine parameters into a struct
+        real(dp), intent(in) :: hx, temp, hz
 
         ! ... Local variables ...
         integer :: obs, m, q, idx
 
         real(dp) :: qvec(2)
 
-        print*, hx, temp, &
+        print*, hx, temp, hz, &
         P0%meas(P0_ENERGY, P0%avg), P0%meas(P0_ENERGY, P0%err), &
         P0%meas(P0_MAGNETIZATION, P0%avg), P0%meas(P0_MAGNETIZATION, P0%err), &
         P0%meas(P0_COPARAM, P0%avg), P0%meas(P0_COPARAM, P0%err), &
@@ -451,7 +449,7 @@ module measurements
 
         ! Averages, error bars and autocorrelation times for all scalar quantities 
         open(500, file='averages'//chr_rank//'.dat', position='append', status='unknown')
-        write(500, *) hx, temp, &
+        write(500, *) hx, temp, hz,  &
             ( P0%meas(obs, P0%avg), P0%meas(obs, P0%err), P0%meas(obs, P0%ac_time), obs = 1, P0%Nscalar_prop )
         close(500)
 
@@ -493,11 +491,12 @@ module measurements
             write(700, *) "======================"
             write(700, *) "transverse field        : 1"
             write(700, *) "temperature             : 2"
-            write(700, *) "============================"
-            write(700, *) "Scalar observables: avg, err"
-            write(700, *) "============================"        
+            write(700, *) "longitudinal field      : 3"
+            write(700, *) "==============================================="
+            write(700, *) "Scalar observables: avg, err, (binning) AC time"
+            write(700, *) "==============================================="        
             do obs = 1, P0%Nscalar_prop
-                write(700, *) P0_STR(obs), 2 +(obs-1)*2 + 1, 2 +(obs-1)*2 + 2
+                write(700, *) P0_STR(obs), 3 +(obs-1)*3 + 1, 3 +(obs-1)*3 + 2, 3 +(obs-1)*3 + 3
             enddo
             close(700)
         endif 

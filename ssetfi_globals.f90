@@ -12,6 +12,7 @@ module ssetfi_globals
     real(dp), allocatable :: J_interaction_matrix(:,:)
     real(dp), allocatable :: J_translat_invar(:,:)
     integer, allocatable  :: Jij_sign(:,:)
+    real(dp), allocatable :: hz_fields(:)
     type(t_ProbTable) :: probtable 
         
     type(t_Config) :: config 
@@ -29,6 +30,7 @@ module ssetfi_globals
         if( allocated(plaquettes) ) deallocate(plaquettes)
         if( allocated(J_interaction_matrix) ) deallocate(J_interaction_matrix)
         if( allocated(Jij_sign) ) deallocate(Jij_sign)
+        if( allocated(hz_fields) ) deallocate(hz_fields)
         if( allocated(spins) ) deallocate(spins)
         if( allocated(opstring) ) deallocate(opstring)
         if( allocated(vertexlink) ) deallocate(vertexlink)

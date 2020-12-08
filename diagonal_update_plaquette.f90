@@ -7,6 +7,7 @@
 
 module diagonal_update
   use types
+  use util
   implicit none 
   private 
 
@@ -22,13 +23,33 @@ type t_ProbTable
   ! of Ising (4-leg) bond operators 
   real(dp), allocatable :: P_cumulfirst(:)
   real(dp), allocatable :: P_cumulsecond(:,:)
-  real(dp) :: sum_all_diagmatrix_elements_2or4leg
-  real(dp) :: sum_all_diagmatrix_elements
-  real(dp) :: prob_2or4leg
   real(dp) :: consts_added 
+  real(dp) :: sum_all_diagmatrix_elements 
+  integer :: n_opclass                           ! number of classes of diagonal operators to be chosen from in the diagonal update
+  real(dp), allocatable :: cumprob_opclasses(:)  ! cumulative sum of the probabilities to insert an operator from a certain class
+  integer, allocatable  :: idx_opclasses(:)      ! integer indices for operator classes (used in the diagonal update)
 end type 
 
   contains 
+
+pure function choose_diagopclass(eta, probtable) result(optype)
+  ! Purpose:
+  ! --------
+  !
+  ! Arguments:
+  ! ----------
+  real(dp), intent(in) :: eta   ! random number, uniformly distributed on [0,1]
+  type(t_ProbTable), intent(in) :: probtable   
+  integer :: optype 
+  integer :: c
+
+  do c = 1, probtable%n_opclass
+    if( eta < probtable%cumprob_opclasses(c) ) then 
+      optype = probtable%idx_opclasses(c)
+      exit
+    endif 
+  enddo 
+end function 
 
 SUBROUTINE diagonal_update_plaquette( S, beta, Jij_sign, &
      spins, opstring, config, probtable, plaquettes, update_type, &
@@ -65,25 +86,24 @@ logical, intent(in) :: TRANSLAT_INVAR
 integer :: ip, i1, i2, index1, index2, index2_from_origin
 integer :: r(2)
 integer :: sub1
+integer :: optype
 
 integer :: plaq_idx
 
 real(dp) :: P_plus, P_minus, P_add, P_remove
-real(dp) :: prob
+real(dp) :: prob, eta
 
 ! propagated spin configuration at a given propagation step
 integer, allocatable :: spins2(:) 
 
-logical :: OP_INSERTED
-
 ! for plaquette-based cluster update 
 integer :: ir_A, ir_B, ir_C
 
-ALLOCATE(spins2( SIZE(spins,1) ))
+allocate(spins2( SIZE(spins,1) ))
 
 spins2(:) = spins(:)
 
-! Initialize P_add and P_remove
+! Initialize P_add and P_remove given the current expansion order. 
 P_remove = float(( config%LL - config%n_exp + 1)) &
           / ( float(config%LL- config%n_exp + 1) + beta*probtable%sum_all_diagmatrix_elements )
 P_add = beta*probtable%sum_all_diagmatrix_elements &
@@ -95,7 +115,7 @@ do ip=1, config%LL
   i2 = opstring(ip)%j
   
 !identity encountered
-IF( (i1 == 0).AND.(i2 == 0) ) THEN
+IF( (i1 == 0).and.(i2 == 0) ) THEN
 
     ! heat bath solutions to the detailed balance condition equations
     P_plus = P_add    
@@ -103,18 +123,24 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
         
   IF( prob <= P_plus ) THEN 
   ! try to insert an operator  
-  OP_INSERTED = .FALSE.
- 
+
    ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
    ! Choice among different classes of diagonal operators 
    ! First, decide whether to insert 
    !     - a triangular plaquette operator
-   !     - or a diagonal 2-leg or 4-leg vertex.
+   !     - or a diagonal 2-leg CONSTANT or 4-leg ISING vertex
+   !     - or a diagonal 2-leg LONGITUDINAL operator 
+   ! IMPROVE: maybe make 2-leg CONSTANT a separate class ? 
    ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-   call random_number(prob)
    
-   IF( prob <= (probtable%prob_2or4leg) ) THEN
-  ! Try inserting an Ising operator or a constant at propagation step ip
+   ! choose with heat bath probability 
+   call random_number(prob)
+   optype = choose_diagopclass(prob, probtable)
+
+   choose_insert_optype: select case( optype )
+
+  case( TWOLEGCONST_OR_FOURLEG )
+  ! Try inserting an Ising operator or a constant at propagation step `ip`
   ! assuming that all insertions are allowed.
     
     ! Heat bath algorithm for first index (=first site on which the Ising operator / const acts)
@@ -145,7 +171,6 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
       endif 
       if ( Jij_sign(r(1), r(2)).gt.0 ) then !AFM
         if (spins2(index1).ne.spins2(index2)) then
-          OP_INSERTED = .TRUE.
           if (index1.lt.index2) then
             opstring(ip)%i = index1
             opstring(ip)%j = index2
@@ -167,7 +192,6 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
         endif
       else !FM; Note that index1 and index2 such that Jij_sign(index1,index2)==0 can never be draw from the prob. tables.
         if (spins2(index1).eq.spins2(index2)) then
-          OP_INSERTED = .TRUE.
           if (index1.lt.index2) then
             opstring(ip)%i = index1
             opstring(ip)%j = index2
@@ -189,7 +213,6 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
       endif
     else !index1.eq.index2 => constant operator to be inserted
     ! There is no constraint on inserting constants
-        OP_INSERTED = .TRUE.
         opstring(ip)%i = index1
         opstring(ip)%j = index2
         opstring(ip)%optype = CONSTANT
@@ -204,7 +227,7 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
           / ( float(config%LL-config%n_exp) + beta*probtable%sum_all_diagmatrix_elements )
     endif !index1.ne.index2
 
-   ELSE
+  case( TRIANGULAR_PLAQUETTE )
     ! Try to insert a triangular plaquette operator 
     ! Select the plaquette number 
     call random_number(prob)
@@ -240,7 +263,6 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
   if (abs(spins2(ir_A) + spins2(ir_B) + spins2(ir_C)) .eq. 1) then 
   ! The spin config is minimally frustrated so that the plaquette operator 
   ! can be inserted. 
-     OP_INSERTED = .TRUE.
      ! %i and %j are assigned negative values in order to differentiate 
      ! between Ising bond operators and plaquette operators  
      opstring(ip)%i = -ir_A  
@@ -264,17 +286,43 @@ IF( (i1 == 0).AND.(i2 == 0) ) THEN
       / ( float(config%LL- config%n_exp + 1) + beta*probtable%sum_all_diagmatrix_elements )
      P_add = beta*probtable%sum_all_diagmatrix_elements &
       / ( float(config%LL-config%n_exp) + beta*probtable%sum_all_diagmatrix_elements )
-
   endif 
   
-   endif ! plaquette or (2-leg or 4-leg) vertex ?
+  case( LONGITUDINAL )
+
+     ! for homogeneous longitudinal fields
+     call random_number(eta)
+     i1 = int(eta*S%Nsites) + 1
+
+     ! MISSING: sample positions for inhomogeneous fields
+     ! based on hz_fields(:) 
+
+     opstring(ip)%optype = LONGITUDINAL 
+     opstring(ip)%i = i1
+     opstring(ip)%j = -i1 ! actually, not necessary to set this entry 
+     opstring(ip)%k = spins2(i1)
+
+     config%n_exp = config%n_exp + 1; config%n2leg_hz = config%n2leg_hz + 1 
+     ! update P_add and  P_remove
+     P_remove = float(( config%LL - config%n_exp + 1)) &
+        / ( float(config%LL- config%n_exp + 1) + beta*probtable%sum_all_diagmatrix_elements )
+     P_add = beta*probtable%sum_all_diagmatrix_elements &
+        / ( float(config%LL-config%n_exp) + beta*probtable%sum_all_diagmatrix_elements )
+
+  case default
+      print*, "Diagonal update: Trying to insert unknown diagonal operator type"
+      print*, "optype = ", optype
+      print*, "Exiting ..."
+      stop 
+
+  end select choose_insert_optype
 
   endif !if(prob <= P_plus)
   
 endif !identity encountered
 
   ! Diagonal operator encountered: 
-  ! Try replacement:  Ising plaquette / Ising bond / const => identity
+  ! Try replacement:  Ising plaquette / Ising bond / const (hx) / longitudinal (hz) => identity
   ! Expansion order changes as n_exp -> n_exp - 1
   if ((i1.ne.0).and.(i2.ne.0)) then
 
@@ -282,12 +330,11 @@ endif !identity encountered
     call random_number(prob)
      
     if (prob <= P_minus) then
-      opstring(ip)%i = 0
-      opstring(ip)%j = 0
-      opstring(ip)%optype = IDENTITY 
 #ifdef DEBUG_DIAGONAL_UPDATE
-  print*, "remove a diagonal operator"
-#endif                 
+      print*, "remove a diagonal operator"
+#endif      
+      optype = opstring(ip)%optype
+           
       config%n_exp = config%n_exp - 1
       ! update P_add and  P_remove
       P_remove = float(( config%LL - config%n_exp + 1)) &
@@ -295,18 +342,24 @@ endif !identity encountered
       P_add = beta*probtable%sum_all_diagmatrix_elements &
         / ( float(config%LL-config%n_exp) + beta*probtable%sum_all_diagmatrix_elements )
   
-    if (i1 .lt. 0) then ! Triangular plaquette operators are identified by opstring(ip)%i < 0 and opatring(ip)%j < 0. 
-       config%n6leg = config%n6leg - 1  ! plaquette operator removed
-    else ! constant or plaquette operator 
-      if ( i1.ne.i2 ) then ! Ising operator removed
-        config%n4leg = config%n4leg - 1
-      elseif (i1.eq.i2) then ! constant removed 
-        config%n2leg = config%n2leg - 1
-      else
-          STOP "diagonal_update(): ERROR: trying to remove unknown operator type"
-      endif 
-    endif  
+      select case( optype )
+        case( TRIANGULAR_PLAQUETTE )
+          config%n6leg = config%n6leg - 1  ! plaquette operator removed
+        case( ISING_BOND )
+          config%n4leg = config%n4leg - 1
+        case( CONSTANT )
+          config%n2leg = config%n2leg - 1
+        case( LONGITUDINAL )
+          config%n2leg_hz = config%n2leg_hz - 1
+        case default 
+          stop "diagonal_update(): ERROR: trying to remove unknown operator type"
+      end select 
       
+      opstring(ip)%i = 0
+      opstring(ip)%j = 0
+      opstring(ip)%k = 0 ! to be sure nothing bad happens
+      opstring(ip)%optype = IDENTITY  
+
     endif
   endif
 
@@ -319,7 +372,7 @@ enddo !do ip=1,LL
 
 ! Update important variables that have not been explicitly 
 ! updated
-    config%n_legs = 2*config%n2leg+4*config%n4leg+6*config%n6leg
+    config%n_legs = 2*config%n2leg+2*config%n2leg_hz+4*config%n4leg+6*config%n6leg
     config%n_ghostlegs = MAX_GHOSTLEGS*config%LL
 
 deallocate(spins2)
@@ -328,7 +381,6 @@ END SUBROUTINE diagonal_update_plaquette
 
 
 PURE FUNCTION binary_search(cumul_prob_table, prob) RESULT(idx)
-! ***********************************************************************
 ! Purpose:
 ! --------
 ! Sample the normalized discrete probability distribution 
@@ -345,19 +397,19 @@ PURE FUNCTION binary_search(cumul_prob_table, prob) RESULT(idx)
 ! Return:
 ! ------- 
 !    idx:  The sampled index.
-! ***********************************************************************
-
+!
     USE types
     IMPLICIT NONE    
     REAL(dp), INTENT(IN) :: cumul_prob_table(:)
     REAL(dp), INTENT(IN) :: prob    
+
+! ... Local variables ...
     INTEGER :: idx
-    
     LOGICAL :: FOUND
     INTEGER :: k1, k2, k
             
 #ifdef DEBUG
-    IF(SUM(cumul_prob_table(:)) /= 1.d0) STOP &
+    IF(SUM(cumul_prob_table(:)) /= 1.0_dp) STOP &
           "binary_search(): ERROR: cumul. prob. table is not normalized."
 #endif 
     FOUND = .FALSE.
@@ -390,8 +442,8 @@ END FUNCTION binary_search
 
 
 subroutine init_probtables( S, J_interaction_matrix, hx, &
-  probtable, J_1, n_plaquettes, TRANSLAT_INV )
-! *******************************************************************
+  probtable, J_1, n_plaquettes, TRANSLAT_INV, &
+  hz_fields, C_par_hyperparam )
 ! Purpose:
 ! --------
 !    Precompute cumulative probability tables needed for sampling 
@@ -417,12 +469,12 @@ subroutine init_probtables( S, J_interaction_matrix, hx, &
 !       Precomputed cumulative probability tables
 !    Jij_sign: integer array
 !       Sign of the interaction bonds. 
-! 
-! *******************************************************************
 use SSE_configuration 
 use lattice
 implicit none 
 
+! Arguments:
+! ----------
 type(Struct), intent(in)       :: S
 real(dp), intent(in)           :: J_interaction_matrix(:,:)
 real(dp), intent(in)           :: hx
@@ -430,19 +482,23 @@ type(t_ProbTable), intent(out) :: probtable
 real(dp), intent(in)           :: J_1  ! nearest neighbour interactions inside a plaquette, subroutine expects: J_1 = +1
 integer,intent(in)             :: n_plaquettes 
 logical, intent(in)            :: TRANSLAT_INV
+real(dp), intent(in)           :: hz_fields(:)
+real(dp), intent(in)           :: C_par_hyperparam
 
-! automatic helper arrays
+! ... Local variables ...
 ! array of the matrix elements of the bond operators, i.e. h for i=j and 2|J_ij| else
 real(dp) :: M_ij( size(J_interaction_matrix, 1), size(J_interaction_matrix, 1) )
 real(dp) :: M_ij_sub( 1:S%Nbasis, 1:S%Nsites )
 ! relative probabilities for choosing the first index of an Ising operator
 real(dp) :: P_first( size(J_interaction_matrix, 1) )
-integer :: n
-real(dp) :: cc, ss
 
-integer :: ir, jr, k
-real(dp) :: norm
-integer :: subi
+integer, parameter :: n_opclass = 3 
+real(dp) :: sum_all_diagmatrix_elements_peropclass(1:n_opclass)
+real(dp) :: consts_added_per_opclass(1:n_opclass)
+real(dp) :: prob_opclass(1:n_opclass)
+
+real(dp) :: cc, ss, norm
+integer :: ir, jr, k, n, subi
 
 if( J_1 /= +1 ) then 
   print*, "For the triangular plaquette update to be meaningful we need J_1 = +1 (i.e. AFM)."
@@ -456,71 +512,110 @@ if( J_1 /= +1 ) then
     print*, "Exiting ..."
     stop
   endif 
-endif 
-
+endif
 ! number of lattice sites 
 n = size(J_interaction_matrix, 1)
 if( n /= S%Nsites ) then 
   print*, "ERROR: init_probtables(): n /= S%Nsites "
   stop
 endif 
+call assert( all(shape(J_interaction_matrix) == (/S%Nsites, S%Nsites/)) ) 
 
-! IMPROVE: assert( all(shape(J_interaction_matrix) == (/S%Nsites, S%Nsites/)) ) 
 
-! Hamiltonian matrix elements on the computational, i.e. the Sz - basis
-! Matrix elements have only two values, TWO*abs(J_ij) and hx:
-! The factor TWO is not necessary if a bond can be represented both as (i1, j1) and (j1, i1),
-! which is the choice taken in this code.  
-M_ij(:,:) = abs(J_interaction_matrix(:,:)) ! TWO*dabs(J_interaction_matrix(:,:)) 
-
+M_ij(:,:) = abs(J_interaction_matrix(:,:)) 
 do ir=1,n
 ! Overwrite Ising self-interactions that might arise from Ewald summation.
 ! (They would only contribute a constant energy offset.)
   M_ij(ir,ir) = abs(hx)
 enddo
 
+! In our decomposition of the Hamiltonian there are 3 classes 
+! of diagonal operators (`n_opclass`)
+! (1) 2-leg CONSTANT or 4-leg ISING operators 
+! (2) 6-leg TRIANGULAR_PLAQUETTE operators 
+! (3) 2-leg LONGITUDINAL (i.e. `hz`) operators
+
 ! 1. The constants which have been added to the Hamiltonian artificially have to be
 ! subtracted from the energy in the end.
 ! 2. Sum over all matrix elements used in the transition probabilities 
 ! when deciding whether to insert or remove an operator
 
-cc = n*hx
-ss = n*hx
+! (1) 2-leg CONSTANT or 4-leg ISING operators
+! -------------------------------------------
+cc = n*hx  ! constant operators added 
+ss = n*hx  ! sum of all matrix elements 
 do ir=1, n
 do jr=1, ir-1 ! avoid double counting and count only ir.ne.jr
   cc = cc + M_ij(ir,jr)      ! abs(J_interaction_matrix(ir,jr)) 
   ss = ss + TWO*M_ij(ir,jr)  ! TWO*abs(J_interaction_matrix(ir,jr))
 enddo
 enddo
+sum_all_diagmatrix_elements_peropclass(1) = ss 
+consts_added_per_opclass(1) = cc
 
+! (2) TRIANGULAR PLAQUETTE operators
+! ----------------------------------
 ! see Ref. [1]
 if (trim(S%lattice_type) == "triangular") then 
-! Triangular lattice 
-cc = cc + (3.0_dp/2.0_dp) * abs(J_1) * n_plaquettes
+    ! Triangular lattice 
+    consts_added_per_opclass(2) = (3.0_dp/2.0_dp) * abs(J_1) * n_plaquettes
 elseif (trim(S%lattice_type) == "kagome") then 
-! Kagome lattice 
-cc = cc + 3.0_dp * abs(J_1) * n_plaquettes
+    ! Kagome lattice 
+    consts_added_per_opclass(2) = 3.0_dp * abs(J_1) * n_plaquettes
 else
-stop "init_probtables(): Unknown lattice type."
+    stop "init_probtables(): Unknown lattice type."
 endif 
-
-probtable%consts_added = cc
-probtable%sum_all_diagmatrix_elements_2or4leg = ss 
-! include matrix elements from triangular plaquettes 
+ 
+! matrix elements from triangular plaquettes 
 ! (of the Hamiltonian shifted by the constants)
 if (trim(S%lattice_type) == "triangular") then 
-probtable%sum_all_diagmatrix_elements = ss + 2.0_dp * abs(J_1) * n_plaquettes
+    sum_all_diagmatrix_elements_peropclass(2) = 2.0_dp * abs(J_1) * n_plaquettes
 elseif (trim(S%lattice_type) == "kagome") then 
-probtable%sum_all_diagmatrix_elements = ss + 4.0_dp * abs(J_1) * n_plaquettes
+    sum_all_diagmatrix_elements_peropclass(2) = 4.0_dp * abs(J_1) * n_plaquettes
 else
-stop "init_probtables(): Unknown lattice type."
+    stop "init_probtables(): Unknown lattice type."
 endif 
-probtable%prob_2or4leg = probtable%sum_all_diagmatrix_elements_2or4leg &
-                        / probtable%sum_all_diagmatrix_elements
+
+
+! (3) LONGITUDINAL field operators 
+! --------------------------------
+cc = 0
+ss = 0
+do ir = 1, n
+  cc = cc + abs(hz_fields(ir)) + C_par_hyperparam
+  ! `hz` vertex on an up-spin and `hz` vertex on a down-spin are regarded as 
+  ! two different types of vertices. One has the matrix element `C_par_hyperparam`
+  ! and the other has the matrix element 2*abs(hz_fields(i)) + `C_par_hyperparam`. 
+  ! This is why `C_par_hyperparam` appears twice in the sum of all matrix elements. 
+  ss = ss + 2*abs(hz_fields(ir)) + 2*C_par_hyperparam
+enddo
+sum_all_diagmatrix_elements_peropclass(3) = ss 
+consts_added_per_opclass(3) = cc
+
+! Probability for inserting an operator from one of the
+! `n_opclass` classes. 
+prob_opclass(:) = sum_all_diagmatrix_elements_peropclass(:) / sum(sum_all_diagmatrix_elements_peropclass(:))
+print*, "prob_opclass=", prob_opclass(:)
+call assert( all(prob_opclass >= 0.0_dp), "neg. probs. in prob_opclass" )
+
+! Cumulative probabilities for sampling
+allocate(probtable%cumprob_opclasses(1:n_opclass))
+do k = 1, n_opclass
+    probtable%cumprob_opclasses(k) = sum(prob_opclass(1:k))
+enddo
+
+allocate(probtable%idx_opclasses(1:n_opclass))
+probtable%idx_opclasses(1) = TWOLEGCONST_OR_FOURLEG
+probtable%idx_opclasses(2) = TRIANGULAR_PLAQUETTE
+probtable%idx_opclasses(3) = LONGITUDINAL 
+
+probtable%sum_all_diagmatrix_elements = sum(sum_all_diagmatrix_elements_peropclass(:))
+probtable%consts_added = sum(consts_added_per_opclass(:))
+probtable%n_opclass = n_opclass
+
 
 ! Calculate the cumulative probability tables used in the diagonal update
-! for the insertion of diagonal 2leg and 4leg vertices. 
-
+! for the insertion of diagonal 2leg CONSTANT and 4leg ISING vertices. 
 if( TRANSLAT_INV) then 
 
   allocate( probtable%P_cumulfirst(1) ) ! P_cumulfirst is not needed for translationally invariant systems 

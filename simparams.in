@@ -21,6 +21,8 @@
 ! lattice_type = ["triangular", "kagome"]
 !   Underlying lattice structure. For "triangular" and "kagome" lattices
 !   the Biswas-Rakala-Damle plaquette update will be used.     
+! ignore_Jmatrix: 
+!   Whether the following input file should be used or not. 
 ! Jmatrix_file = "Jmatrix.txt":
 !   Name of the file where the interaction matrix `Jmatrix(:,:)`
 !   of shape (n_sites*n_basis, n_sites*n_basis) is stored. 
@@ -35,12 +37,23 @@
 ! translat_invar: logical variable 
 !   Whether the interaction matrix is translationally invariant 
 !   or not.
+! ignore_hz_fields: 
+!   Whether the following input file should be used or not. 
+! hz_fields_file = "hz_fields.txt":
+!   Value of the longitudinal field for each site. Allowed values 
+!   are [-\infty, +\infty]. Reading this file supersedes
+!   the value for a homogeneous longitudinal field given in `hz`. 
+! C_par_hyperparam: a tuneable hyperparameter \in [0, + \infty]
+!   In the presence of a longitudinal field, not all clusters in the 
+!   off-diagonal update can be flipped with probability 1/2 due to an 
+!   exchange field. `C_par_hyperparam` > 0 allows to flip clusters even
+!   for non-zero exchange field. 
 ! nmeas_step, Nbin :
 !   In total, `nmeas_step` measurement steps are performed,
 !   which are split into `Nbin` bins. 
 ! paramscan:
-!   One of the string constants "parampoint", "paramscan_hx"
-!   "paramscan_T".
+!   One of the string constants "parampoint", "paramscan_hx",
+!   "paramscan_T", or "paramscan_hz".
 !   For "parampoint", the MPI parallelization is over MCS 
 !   steps for a single parameter point (hx, temp). 
 !   For "paramscan_hx" or "paramscan_T", different MPI jobs
@@ -58,21 +71,25 @@
 !   rank (for production runs). 
 ! ========================================================
 &SIMPARAMS
-J_1 		= 0    ! +1.0
+J_1 		= +    ! +1.0
 hx  		= 1.0  ! hx > 0 required
+hz          = 0.0  ! hz \in [-\infty, +\infty]; homogeneous longitundinal field
 temp 		= 0.1
 nx   		= 3
 ny   		= 3
-n_sites 	= 27
-lattice_type = "kagome"
-ignore_Jmatrix = F
-Jmatrix_file = "J3x3_inplane.txt"  !"Jmatrix_nnFM.dat" !"Jmatrix_kagome2x2_FM.dat"  !"Jmatrix_nnFM.dat" 
-translat_invar = T
+n_sites 	= 9
+lattice_type = "triangular"
+ignore_Jmatrix = T
+Jmatrix_file = "Jmatrix_nnFM.txt" !"Jmatrix_kagome2x2_FM.dat"  !"Jmatrix_nnFM.dat"  "J3x3_inplane.txt" 
+translat_invar = F
+ignore_hz_fields = T
+hz_fields_file = "hz_fields.txt"
+C_par_hyperparam = 0.0
 ntherm_step = 1000
 nmeas_step  = 10000
 Nbin        = 10
 paramscan   = "paramscan_hx"
-scan_min    = 0.1
+scan_min    = 0.05
 scan_max    = 2.0
 heavy_use   = F
 deterministic = T

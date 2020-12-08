@@ -5,7 +5,35 @@ module util
     real(dp), parameter :: PI = dacos(-1.d0)
 
     contains 
+
     
+subroutine assert( condition, msg )
+! 
+! Purpose:
+! ========
+! Print (optional) error message and exit when 
+! assert logical condition fails.
+!
+! Arguments:
+! ==========
+    logical, intent(in) :: condition
+    character(len=*), intent(in), optional :: msg
+
+    ! ... Local variables ...
+    character(len=100) :: out_msg
+
+    if (.not.condition) then 
+        if( present(msg) ) then 
+            out_msg = "ERROR: "//trim(msg)//" => Exiting ..."
+        else
+            out_msg = "ERROR: "
+        endif 
+        print*, out_msg 
+        stop 
+    endif 
+    
+end subroutine assert
+
 
 function spins2binrep(spins) result(binrep_integer)
 !

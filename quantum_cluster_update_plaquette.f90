@@ -3,7 +3,7 @@ module cluster_update
 #ifdef DEBUG_CLUSTER_UPDATE
 use test_helper, only: output_SSE_config
 #endif
-use types, only: dp
+use types, only: dp, TWO
 use SSE_configuration 
 implicit none 
 private
@@ -14,6 +14,7 @@ public quantum_cluster_update_plaquette
 integer, parameter :: UP=+1, DOWN=-1
 ! for triangular-plaquette based update 
 integer, parameter :: A_LEG=1, B_LEG=2, C_LEG=3
+real(dp) :: wratio_exchange_field = 1.0
 
 contains 
 
@@ -63,6 +64,11 @@ pure function gleg_to_ir(op, gleg) result(ir)
             ir = op%i
         case(SPIN_FLIP)
             ir = op%i
+        case(LONGITUDINAL)
+            ir = op%i
+        case default
+            ! No checking for strange input, since stop and print statements 
+            ! are not allowed in a pure function. 
     end select 
         
 
@@ -95,61 +101,34 @@ pure function leg_direction(gleg) result(dir)
 end function leg_direction 
         
 
-! pure function operator_type(op) result(t)
-!     implicit none 
-!     type(t_BondOperator), intent(in) :: op
-!     integer :: t
-          
-!     ! if( op%i == 0) then 
-!     !     t = IDENTITY
-!     ! elseif( op%i < 0 ) then         
-!     !     t = TRIANGULAR_PLAQUETTE
-!     ! elseif( op%i > 0) then 
-!     !     if( op%j == 0) then
-!     !         t = SPIN_FLIP        
-!     !     elseif( op%j == op%i ) then 
-!     !         t = CONSTANT     
-!     !     elseif( op%j > op%i ) then 
-!     !         t = ISING_BOND
-!     !     endif 
-!     ! endif 
-            
-!     ! ! different order of if-clauses
-!     ! if( op%i > 0) then 
-!     !     if( op%j == 0) then
-!     !         t = SPIN_FLIP        
-!     !     elseif( op%j == op%i ) then 
-!     !         t = CONSTANT     
-!     !     elseif( op%j > op%i ) then 
-!     !         t = ISING_BOND
-!     !     endif 
-!     ! elseif( op%i < 0 ) then         
-!     !     t = TRIANGULAR_PLAQUETTE        
-!     ! elseif( op%i == 0) then 
-!     !     t = IDENTITY    
-!     ! endif 
-
-!     t = op%optype 
-
-! end function operator_type 
-        
 subroutine quantum_cluster_update_plaquette( &
-    spins, opstring, vertexlink, leg_visited, config )
-! ***************************************************
-! Swendsen-Wang variant of the quantum cluster update
+    spins, opstring, vertexlink, leg_visited, config, &
+    hz_fields, C_par_hyperparam )
+! Purpose:
+! --------
+! Swendsen-Wang variant of the quantum cluster update.
+! For longitudinal field `hz` = 0:     
 ! Build all clusters, which is a deterministic process,
-! and flip each cluster with probaility 1/2. 
-! ***************************************************
+! and flip each cluster with probability 1/2. 
+! For longitudinal field `hz` != 0:     
+! Flip each cluster with probability 1/2 and accept the final
+! configuration with Metropolis acceptance rate according to 
+! the exchange fields of all flipped cluster. 
+
 use class_Stack
 implicit none
-
-integer, intent(inout) :: spins(:)
+! Arguments:
+! ----------
+integer, intent(inout)              :: spins(:)
 type(t_BondOperator), intent(inout) :: opstring(:)
-integer, intent(in) :: vertexlink(:)
+integer, intent(in)                 :: vertexlink(:)
 ! Note: leg_visited(:) must have been initialized during the construction 
 ! of the linked list so as to mark 'ghostlegs' as visited. 
-logical, intent(inout) :: leg_visited(:) 
-type(t_Config), intent(in) :: config  
+logical, intent(inout)              :: leg_visited(:) 
+type(t_Config), intent(in)          :: config  
+real(dp), intent(in)                :: hz_fields(:)      ! site-dependent longitudinal fields
+real(dp), intent(in)                :: C_par_hyperparam  ! hyperparameter for algorithm with longitudinal field
+
     
 ! ... Local variables ...
 type(t_Stack) :: stack
@@ -178,6 +157,11 @@ real(dp) :: prob
 integer :: leg_start, leg, leg_next
 integer :: dir 
 integer :: ip, ir, l  
+
+! Total weight ratio for all flipped clusters
+! due to the exchange field as a result of a 
+! longitudinal field. 
+! real(dp) :: wratio_exchange_field
 
 #ifdef DEBUG_CLUSTER_UPDATE
 integer :: spins2(size(spins,dim=1))
@@ -214,6 +198,11 @@ do while(leg_visited(smallest_unvisited_leg))
     endif 
 enddo 
 
+! Total weight ratio for all flipped clusters
+! due to the exchange field as a result of a 
+! longitudinal field.
+wratio_exchange_field = 1.0_dp
+
 do while( LEGS_TO_BE_PROCESSED )
 
     ! Swendsen-Wang: flip cluster or not 
@@ -236,7 +225,8 @@ do while( LEGS_TO_BE_PROCESSED )
     visited_ip(ip) = .TRUE.
 #endif    
     call process_leg( leg_start, FLIPPING, opstring, &
-                      stack, leg_visited, touched )
+                      stack, leg_visited, touched, &
+                      hz_fields, C_par_hyperparam )
     
     do while( .not.stack%is_empty() )
         leg = stack%pop()   
@@ -265,8 +255,9 @@ do while( LEGS_TO_BE_PROCESSED )
             visited_ip(ip) = .TRUE.
 #endif             
             leg_visited(leg_next) = .TRUE.                        
-            call process_leg( leg_next, FLIPPING, opstring, &
-            stack, leg_visited, touched )            
+            call process_leg( gleg=leg_next, FLIPPING=FLIPPING, opstring=opstring, &
+                stack=stack, leg_visited=leg_visited, touched=touched, &
+                hz_fields=hz_fields, C_par_hyperparam=C_par_hyperparam )            
             
         endif 
 
@@ -294,15 +285,26 @@ do while( LEGS_TO_BE_PROCESSED )
 enddo
 
 ! AT THE VERY END, WHEN ALL CLUSTERS HAVE BEEN BUILT...
-! Update the initial spin configuration 
+call random_number(prob)
+
+if( prob < wratio_exchange_field ) then 
+    ! Accept the flipped clusters
+    ! Update the initial spin configuration 
 #ifdef DEBUG_CLUSTER_UPDATE
     print*, "At the very end, flipping all winding macrospins."
 #endif 
-do ir = 1, config%n_sites
-    if (WINDING_MACROSPIN(ir)) then
-      spins(ir) = -spins(ir)
-    endif
-enddo
+    do ir = 1, config%n_sites
+        if (WINDING_MACROSPIN(ir)) then
+            spins(ir) = -spins(ir)
+        endif
+    enddo
+else
+    ! Reject the flipping of all clusters. 
+    ! The previous spin configuration remains untouched and 
+    ! all changes to the operator list are unimportant because 
+    ! a new diagonal update will generate a new operator string.
+endif 
+
 ! Flip all spins that are not part of a cluster with probability 1/2.
 do ir = 1, config%n_sites
   if (.not.touched(ir)) then
@@ -343,7 +345,6 @@ enddo
         enddo
 #endif
 
-
 #ifdef DEBUG_CLUSTER_UPDATE
     print*, "final spin config=", spins(:)
 #endif 
@@ -352,25 +353,41 @@ end subroutine
 
 
 subroutine process_leg( &
-    gleg, FLIPPING, opstring, stack, leg_visited, touched )
-! *******************************************************************    
-! Process a leg that has been popped from the stack. 
-! *******************************************************************    
+    gleg, FLIPPING, opstring, stack, leg_visited, touched, &
+    hz_fields, C_par_hyperparam )
+! Purpose:
+! --------  
+! Process a leg that has been popped from the stack:
+! - Find the other legs connected to the same vertex
+!   and put them on the stack if the vertex is an Ising vertex. 
+! - Implement the cluster construction rules, i.e. the 
+!   cluster stops if a spin-flip (constant) vertex is encountered
+!   and the spin-flip (constant) vertex is transformed into
+!   constant (spin-flip) vertex. If a longitudinal vertex is encountered,
+!   record the exchange field and accumulated the weight ratio for 
+!   the flipped vertices. 
+  
 use class_Stack
 implicit none
 
+! Arguments:
+! ----------
 integer, intent(in)                 :: gleg 
 logical, intent(in)                 :: FLIPPING ! whether the Swendsen-Wang cluster is to be flipped or not 
 type(t_BondOperator), intent(inout) :: opstring(:)
 type(t_Stack), intent(inout)        :: stack
 logical, intent(out)                :: leg_visited(:)
 logical, intent(out)                :: touched(:)
+real(dp), intent(in)                :: hz_fields(:)      ! site-dependent longitudinal fields
+real(dp), intent(in)                :: C_par_hyperparam  ! hyperparameter for algorithm with longitudinal field
+
 
 ! local variables 
 integer :: ip, i1, i2, i3
 integer :: dir 
 integer :: vleg, vleg_mod
 integer :: leg1, leg2, leg3, leg4, leg5 
+integer :: spin_z
 
 ! Find the operator to which the leg is connected
 ! and which leg it is in a numbering scheme 
@@ -378,206 +395,225 @@ integer :: leg1, leg2, leg3, leg4, leg5
 ip = (gleg-1) / MAX_GHOSTLEGS + 1
 vleg = mod(gleg-1, MAX_GHOSTLEGS) + 1
 
-! i1 and i2 are just needed to determine the operator type
+! i1, i2 and i3 are just needed to mark the sites 
+! as "touched" by a cluster. Spins at the initial propagation step
+! that are not touched by any operator, form a cluster by themselves
+! and can be flipped with probability 1/2. 
 i1 = opstring(ip)%i
-i2 = opstring(ip)%j
-i3 = opstring(ip)%k
 
 dir = leg_direction(gleg)
 
-if( i1.lt.0 ) then
-
+operator_types: select case( opstring(ip)%optype )
+    case( TRIANGULAR_PLAQUETTE )
 #ifdef DEBUG_CLUSTER_UPDATE
-    print*, "leg connected to triangular plaquette"
+        print*, "leg connected to triangular plaquette"
 #endif 
+        ! Triangular plaquette operator encountered.
+        i2 = opstring(ip)%j
+        i3 = opstring(ip)%k
+        ! For triangular plaquettes the cluster construction rules 
+        ! are those described in Ref. [1] 
+        touched((/abs(i1), abs(i2), abs(i3)/)) = .TRUE.
 
-    ! Triangular plaquette operator encountered.
-    ! For triangular plaquettes the cluster construction rules 
-    ! are those described in Ref. [1] 
-    touched((/abs(i1), abs(i2), abs(i3)/)) = .TRUE.
+        vleg_mod = mod(vleg-1, MAX_GHOSTLEGS/2) + 1
+        ! Whether an update is an A-update, B-update, or C-update
+        ! is determined (in the current implementation) during the 
+        ! diagonal update where the components of opstring(:) 
+        ! are initialized depending on the chosen update type. 
+        if (opstring(ip)%PRIVILEGED_LEG_IS_MAJORITY_LEG) then  
+            ! A-site takes part in majority spin configuration  
+            IF( vleg_mod == A_LEG ) THEN  
+                ! entrance leg is privileged leg
+                ! put only the other privileged leg onto the stack 
+                ! (Which vleg number this is depends 
+                ! on whether the entrance leg points down or up.)
+                leg1 = gleg - dir*3
+                call stack%push(leg1)
+                leg_visited(leg1) = .TRUE.
 
-    vleg_mod = mod(vleg-1, MAX_GHOSTLEGS/2) + 1
-    ! Whether an update is an A-update, B-update, or C-update
-    ! is determined (in the current implementation) during the 
-    ! diagonal update where the components of opstring(:) 
-    ! are initialized depending on the chosen update type. 
-    if (opstring(ip)%PRIVILEGED_LEG_IS_MAJORITY_LEG) then  
-        ! A-site takes part in majority spin configuration  
-        IF( vleg_mod == A_LEG ) THEN  
-            ! entrance leg is privileged leg
-            ! put only the other privileged leg onto the stack 
-            ! (Which vleg number this is depends 
-            ! on whether the entrance leg points down or up.)
-            leg1 = gleg - dir*3
-            call stack%push(leg1)
-            leg_visited(leg1) = .TRUE.
+            ELSE ! entrance leg is ordinary leg 
+                ! put all ordinary legs except for the entrance leg onto the stack 
+                if (dir.eq.DOWN) then 
+                    IF( vleg_mod == B_LEG ) THEN
+                        ! put legs 
+                        !      gleg + 1, gleg + 3, gleg + 4   onto stack 
+                        leg1 = gleg + 1
+                        leg2 = gleg + 3
+                        leg3 = gleg + 4		  		
+                    ELSEIF( vleg_mod == C_LEG ) THEN
+                        ! put legs 
+                        !      gleg - 1, gleg + 2, gleg + 3   onto stack 
+                        leg1 = gleg - 1
+                        leg2 = gleg + 2
+                        leg3 = gleg + 3
+                    ENDIF 
+                else ! dir.eq.UP
+                    IF( vleg_mod == B_LEG ) THEN
+                        ! put legs 
+                        !      gleg - 3, gleg - 2, gleg + 1   onto stack 
+                        leg1 = gleg - 3
+                        leg2 = gleg - 2
+                        leg3 = gleg + 1		
+                    ELSEIF( vleg_mod == C_LEG ) THEN
+                        ! put legs 
+                        !      gleg - 1, gleg - 3, gleg - 4   onto stack
+                        leg1 = gleg - 1		  
+                        leg2 = gleg - 3
+                        leg3 = gleg - 4      
+                    ENDIF 
+                endif ! dir = [UP | DOWN]
+                call stack%push_many( (/ leg1, leg2, leg3 /) )
+                leg_visited(leg1) = .TRUE.          
+                leg_visited(leg2) = .TRUE.          
+                leg_visited(leg3) = .TRUE.     
+            ENDIF ! ENDIF: entrance leg is ordinary leg   
 
-        ELSE ! entrance leg is ordinary leg 
-            ! put all ordinary legs except for the entrance leg onto the stack 
-            if (dir.eq.DOWN) then 
-                IF( vleg_mod == B_LEG ) THEN
-                    ! put legs 
-                    !      gleg + 1, gleg + 3, gleg + 4   onto stack 
-                    leg1 = gleg + 1
-                    leg2 = gleg + 3
-                    leg3 = gleg + 4		  		
-                ELSEIF( vleg_mod == C_LEG ) THEN
-                    ! put legs 
-                    !      gleg - 1, gleg + 2, gleg + 3   onto stack 
-                    leg1 = gleg - 1
+        else ! A-site on minority spin configuration
+            ! => Put all legs except for the entrance leg onto the stack. 
+            if (dir.eq.DOWN) then
+                IF( vleg_mod == A_LEG ) THEN 
+                    ! put gleg +1, +2, +3, +4, +5 onto stack          
+                    leg1 = gleg + 1        
                     leg2 = gleg + 2
                     leg3 = gleg + 3
-                ENDIF 
-            else ! dir.eq.UP
-                IF( vleg_mod == B_LEG ) THEN
-                    ! put legs 
-                    !      gleg - 3, gleg - 2, gleg + 1   onto stack 
-                    leg1 = gleg - 3
-                    leg2 = gleg - 2
-                    leg3 = gleg + 1		
+                    leg4 = gleg + 4
+                    leg5 = gleg + 5
+                ELSEIF( vleg_mod == B_LEG ) THEN
+                    ! put gleg -1, +1, +2, +3, +4 onto stack          
+                    leg1 = gleg - 1
+                    leg2 = gleg + 1
+                    leg3 = gleg + 2
+                    leg4 = gleg + 3
+                    leg5 = gleg + 4
                 ELSEIF( vleg_mod == C_LEG ) THEN
-                    ! put legs 
-                    !      gleg - 1, gleg - 3, gleg - 4   onto stack
-                    leg1 = gleg - 1		  
+                    ! put gleg -2, -1, +1, +2, +3 onto stack 
+                    leg1 = gleg - 2
+                    leg2 = gleg - 1
+                    leg3 = gleg + 1
+                    leg4 = gleg + 2
+                    leg5 = gleg + 3      
+                ENDIF
+            else ! dir == UP
+                IF( vleg_mod == A_LEG ) THEN 
+                    ! put gleg -3, -2, -1, +1 ,+2 onto stack       
+                    leg1 = gleg - 3	  
+                    leg2 = gleg - 2
+                    leg3 = gleg - 1         
+                    leg4 = gleg + 1
+                    leg5 = gleg + 2      
+                ELSEIF( vleg_mod == B_LEG ) THEN 
+                    ! put gleg -4, -3, -2, -1, +1 onto stack       
+                    leg1 = gleg - 4	  
                     leg2 = gleg - 3
-                    leg3 = gleg - 4      
-                ENDIF 
+                    leg3 = gleg - 2
+                    leg4 = gleg - 1
+                    leg5 = gleg + 1      
+                ELSEIF( vleg_mod == C_LEG ) THEN 
+                    ! put gleg -5, -4, -3, -2, -1 onto stack     
+                    leg1 = gleg - 5
+                    leg2 = gleg - 4
+                    leg3 = gleg - 3
+                    leg4 = gleg - 2
+                    leg5 = gleg - 1
+                ENDIF   
             endif ! dir = [UP | DOWN]
-            call stack%push_many( (/ leg1, leg2, leg3 /) )
-            leg_visited(leg1) = .TRUE.          
-            leg_visited(leg2) = .TRUE.          
-            leg_visited(leg3) = .TRUE.     
-        ENDIF ! ENDIF: entrance leg is ordinary leg   
-
-    else ! A-site on minority spin configuration
-        ! => Put all legs except for the entrance leg onto the stack. 
-        if (dir.eq.DOWN) then
-            IF( vleg_mod == A_LEG ) THEN 
-                ! put gleg +1, +2, +3, +4, +5 onto stack          
-                leg1 = gleg + 1        
-                leg2 = gleg + 2
-                leg3 = gleg + 3
-                leg4 = gleg + 4
-                leg5 = gleg + 5
-            ELSEIF( vleg_mod == B_LEG ) THEN
-                ! put gleg -1, +1, +2, +3, +4 onto stack          
-                leg1 = gleg - 1
-                leg2 = gleg + 1
-                leg3 = gleg + 2
-                leg4 = gleg + 3
-                leg5 = gleg + 4
-            ELSEIF( vleg_mod == C_LEG ) THEN
-                ! put gleg -2, -1, +1, +2, +3 onto stack 
-                leg1 = gleg - 2
-                leg2 = gleg - 1
-                leg3 = gleg + 1
-                leg4 = gleg + 2
-                leg5 = gleg + 3      
-            ENDIF
-        else ! dir == UP
-            IF( vleg_mod == A_LEG ) THEN 
-                ! put gleg -3, -2, -1, +1 ,+2 onto stack       
-                leg1 = gleg - 3	  
-                leg2 = gleg - 2
-                leg3 = gleg - 1         
-                leg4 = gleg + 1
-                leg5 = gleg + 2      
-            ELSEIF( vleg_mod == B_LEG ) THEN 
-                ! put gleg -4, -3, -2, -1, +1 onto stack       
-                leg1 = gleg - 4	  
-                leg2 = gleg - 3
-                leg3 = gleg - 2
-                leg4 = gleg - 1
-                leg5 = gleg + 1      
-            ELSEIF( vleg_mod == C_LEG ) THEN 
-                ! put gleg -5, -4, -3, -2, -1 onto stack     
-                leg1 = gleg - 5
-                leg2 = gleg - 4
-                leg3 = gleg - 3
-                leg4 = gleg - 2
-                leg5 = gleg - 1
-            ENDIF   
-        endif ! dir = [UP | DOWN]
-        call stack%push_many( (/ leg1, leg2, leg3, leg4, leg5 /) )
-        leg_visited(leg1) = .TRUE.
-        leg_visited(leg2) = .TRUE.
-        leg_visited(leg3) = .TRUE.
-        leg_visited(leg4) = .TRUE.
-        leg_visited(leg5) = .TRUE.   
+            call stack%push_many( (/ leg1, leg2, leg3, leg4, leg5 /) )
+            leg_visited(leg1) = .TRUE.
+            leg_visited(leg2) = .TRUE.
+            leg_visited(leg3) = .TRUE.
+            leg_visited(leg4) = .TRUE.
+            leg_visited(leg5) = .TRUE.   
 
 #ifdef DEBUG_CLUSTER_UPDATE
-        print*, "putting on the stack legs ", leg1, leg2, leg3, leg4, leg5
+            print*, "putting on the stack legs ", leg1, leg2, leg3, leg4, leg5
 #endif
 
-    endif ! A-site on majority spin configuration ?
+        endif ! A-site on majority spin configuration ?
 
-elseif( (i1.gt.0).and.(i2.gt.0).and.(i1.ne.i2) ) then
+    case( ISING_BOND )
     ! Ising operator encountered
-
-    touched((/i1, i2/)) = .TRUE.
-
+        i2 = opstring(ip)%j
     ! Extract the three other legs, put them on the stack and mark them.
-    if( vleg == 1 ) then 
-        leg1 = gleg + 1
-        leg2 = gleg + 3
-        leg3 = gleg + 4       
-    elseif( vleg == 2 ) then 
-        leg1 = gleg - 1
-        leg2 = gleg + 2
-        leg3 = gleg + 3
-    elseif( vleg == 4 ) then 
-        leg1 = gleg - 3
-        leg2 = gleg - 2
-        leg3 = gleg + 1        
-    elseif( vleg == 5) then 
-        leg1 = gleg - 1
-        leg2 = gleg - 3
-        leg3 = gleg - 4 
-    endif 
-    call stack%push_many( (/ leg1, leg2, leg3 /) )
-    leg_visited(leg1) = .TRUE.
-    leg_visited(leg2) = .TRUE.       
-    leg_visited(leg3) = .TRUE.
+        if( vleg == 1 ) then 
+            leg1 = gleg + 1
+            leg2 = gleg + MAX_GHOSTLEGS_HALF
+            leg3 = gleg + MAX_GHOSTLEGS_HALF + 1       
+        elseif( vleg == 2 ) then 
+            leg1 = gleg - 1
+            leg2 = gleg + MAX_GHOSTLEGS_HALF - 1
+            leg3 = gleg + MAX_GHOSTLEGS_HALF
+        elseif( vleg == MAX_GHOSTLEGS_HALF + 1 ) then 
+            leg1 = gleg - MAX_GHOSTLEGS_HALF
+            leg2 = gleg - MAX_GHOSTLEGS_HALF + 1
+            leg3 = gleg + 1        
+        elseif( vleg == MAX_GHOSTLEGS_HALF + 2) then 
+            leg1 = gleg - MAX_GHOSTLEGS_HALF - 1
+            leg2 = gleg - MAX_GHOSTLEGS_HALF
+            leg3 = gleg - 1
+        endif 
+        call stack%push_many( (/ leg1, leg2, leg3 /) )
+        leg_visited(leg1) = .TRUE.
+        leg_visited(leg2) = .TRUE.       
+        leg_visited(leg3) = .TRUE.    
+        touched((/i1, i2/)) = .TRUE.
 
 #ifdef DEBUG_CLUSTER_UPDATE
-    print*, "putting on the stack legs ", leg1, leg2, leg3
+        print*, "putting on the stack legs ", leg1, leg2, leg3
 #endif
 
-elseif( (i1.ne.0).and.(i2.eq.0) ) then
+    case( SPIN_FLIP )
     ! The leg is connected to a spin flip operator.
     ! Update: spin flip -> const. The cluster branch STOPS,
     ! i.e. no new legs are put on the stack.
-
-    touched(i1) = .TRUE.
-
 #ifdef DEBUG_CLUSTER_UPDATE
-    print*, "hitting on a 2-leg vertex -> STOP"
+        print*, "hitting on a 2-leg vertex -> STOP"
 #endif
-    if (FLIPPING) then
-        opstring(ip)%i = i1
-        opstring(ip)%j = i1
-        opstring(ip)%optype = CONSTANT 
-    endif    
+        if (FLIPPING) then
+            opstring(ip)%i = i1
+            opstring(ip)%j = i1
+            opstring(ip)%optype = CONSTANT 
+        endif    
+        touched(i1) = .TRUE.
 
-elseif( (i1.ne.0).and.(i2.eq.i1) ) then
+    case( CONSTANT )
     ! The leg is connected to a constant operator.
     ! Update: const -> spin flip. The cluster branch STOPS.
-
-    touched(i1) = .TRUE.
-
 #ifdef DEBUG_CLUSTER_UPDATE
-    print*, "hitting on a 2-leg vertex -> STOP"
+        print*, "hitting on a 2-leg vertex -> STOP"
 #endif
-    if (FLIPPING) then
-        opstring(ip)%i = i1
-        opstring(ip)%j = 0
-        opstring(ip)%optype = SPIN_FLIP
-    endif
-else
-    print*, "cluster update: strange operator detected"
-    print*, "ip=", ip, "i1=", i1, "i2=",i2, "i3=", opstring(ip)%k
-    stop
-endif
+        if( FLIPPING ) then
+            opstring(ip)%i = i1
+            opstring(ip)%j = 0
+            opstring(ip)%optype = SPIN_FLIP
+        endif
+        touched(i1) = .TRUE.
+
+    case( LONGITUDINAL )
+        if( FLIPPING ) then 
+            ! For longitudinal operators, the structure components 
+            ! opstring(ip)%k is used to store the spin state before 
+            ! flipping the cluster 
+
+            spin_z =  opstring(ip)%k 
+
+            if( spin_z * hz_fields(i1) .ge. 0) then 
+                ! spin aligned with the field 
+                wratio_exchange_field = wratio_exchange_field &
+                    * C_par_hyperparam / (TWO * abs(hz_fields(i1)) + C_par_hyperparam)
+            else 
+                wratio_exchange_field = wratio_exchange_field &
+                    * (TWO * abs(hz_fields(i1)) + C_par_hyperparam) / C_par_hyperparam
+            endif 
+        endif 
+        touched(i1) = .TRUE.        
+
+    case default
+        print*, "cluster update: strange operator detected"
+        print*, "ip=", ip, "i1=", opstring(ip)%j, "i2=",i2, "i3=", opstring(ip)%k
+        print*, "optype=", opstring(ip)%optype
+        stop
+
+    end select operator_types
 
 end subroutine process_leg
 

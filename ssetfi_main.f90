@@ -15,16 +15,18 @@ module ssetfi_main
     contains
 
 subroutine one_MCS_plaquette(S, beta, Jij_sign, TRANSLAT_INVAR, spins, opstring, &
-                config, probtable, plaquettes, vertexlink, &
-                leg_visited)
-    ! *****************************************************
+                config, probtable, plaquettes, vertexlink, leg_visited, &
+                hz_fields, C_par_hyperparam)
+    ! Purpose:
+    ! --------
     ! Perform one Monte-Carlo step (MCS), consisting of 
     ! diagonal and off-diagonal update. 
     ! For the case of a plaquette update with triangular 
     ! plaquettes, we cycle over A-, B-, and C-update for 
     ! completing one MCS. 
-    ! *****************************************************   
-
+    !
+    ! Arguments:
+    ! ----------
     type(Struct), intent(in) :: S
     real(dp), intent(in) :: beta
     integer, allocatable, intent(in) :: Jij_sign(:,:)
@@ -36,6 +38,8 @@ subroutine one_MCS_plaquette(S, beta, Jij_sign, TRANSLAT_INVAR, spins, opstring,
     type(t_Plaquette), allocatable, intent(in) :: plaquettes(:)
     integer, allocatable, intent(inout) :: vertexlink(:)
     logical, allocatable, intent(inout) :: leg_visited(:)  
+    real(dp), intent(in) :: hz_fields(:)
+    real(dp), intent(in) :: C_par_hyperparam
         
     integer :: ut ! update type
 
@@ -51,7 +55,8 @@ subroutine one_MCS_plaquette(S, beta, Jij_sign, TRANSLAT_INVAR, spins, opstring,
             vertexlink=vertexlink, leg_visited=leg_visited )        
         call quantum_cluster_update_plaquette( &
             spins=spins, opstring=opstring, vertexlink=vertexlink, &
-            leg_visited=leg_visited, config=config )
+            leg_visited=leg_visited, config=config, &
+            hz_fields=hz_fields, C_par_hyperparam=C_par_hyperparam )
     enddo
 
 end subroutine 
@@ -79,6 +84,7 @@ subroutine init_SSEconfig_hostart( S, LL, config, &
     config%n_exp = 0
     config%LL = LL
     config%n2leg = 0
+    config%n2leg_hz = 0
     config%n4leg = 0 
     config%n6leg = 0
     config%n_ghostlegs = MAX_GHOSTLEGS*config%LL
@@ -127,9 +133,9 @@ program ssetfi
     ! simulation parameters                  !
     ! ***********************************************
     REAL(dp) :: J_1 = +1.0_dp    
-    real(dp) :: hx = 0.60_dp   
-    real(dp) :: temp = 0.1_dp
-    real(dp) :: beta 
+    real(dp) :: hx = 0.60_dp       ! transverse field (in units of J_1)
+    real(dp) :: temp = 0.1_dp      ! temperature (in units of J_1)
+    real(dp) :: beta               ! inverse temperature 
     integer :: nx, ny, n_sites             
 
     integer :: nmeas_step = 10000
@@ -143,6 +149,11 @@ program ssetfi
     real(dp) :: scan_min = 0.0, scan_max = 0.0
     logical :: heavy_use = .FALSE.
     logical :: deterministic = .FALSE.
+    real(dp) :: hz = 0.1_dp  
+    character(len=30) :: hz_fields_file = "hz_fields.txt"
+    logical :: ignore_hz_fields = .FALSE.
+    ! (tuneable) hyperparameter of the algorithm with longitudinal field    
+    real(dp) :: C_par_hyperparam = 0.1_dp  ! allowed range [0, +\infty]    
 
     ! Imaginary time correlations 
     type(t_MatsuGrid)  :: MatsuGrid
@@ -165,7 +176,8 @@ program ssetfi
 
     NAMELIST /SIMPARAMS/ J_1, hx, temp, nx, ny, n_sites, nmeas_step, ntherm_step, Nbin, &
         lattice_type, ignore_Jmatrix, Jmatrix_file, translat_invar, paramscan, &
-        scan_min, scan_max, heavy_use, deterministic
+        scan_min, scan_max, heavy_use, deterministic, &
+        hz, hz_fields_file, ignore_hz_fields, C_par_hyperparam
 
 #if defined (USE_MPI)
     include "mpif.h"
@@ -199,6 +211,8 @@ program ssetfi
         print*, "Simulating hx=", hx, "temp=", temp
     elseif(trim(paramscan) == "paramscan_hx")  then 
         hx = scan_min + MPI_rank * (scan_max - scan_min)/ float(MPI_size)
+    elseif(trim(paramscan) == "paramscan_hz")  then 
+        hz = scan_min + MPI_rank * (scan_max - scan_min)/ float(MPI_size)        
     elseif(trim(paramscan) == "paramscan_T") then 
         temp = scan_min + MPI_rank * (scan_max - scan_min)/ float(MPI_size)
     elseif(trim(paramscan) == "paramscan_L") then 
@@ -216,7 +230,7 @@ program ssetfi
         print*, "ERROR: Unknown value of input parameter `paramscan`"
         stop
     endif 
-    beta = 1.d0 / temp
+    beta = 1.0_dp / temp
 
 
     if (nmeas_step < Nbin) then 
@@ -282,30 +296,30 @@ program ssetfi
     !     enddo         
     ! enddo   
 
-
     ! Output the interaction matrix, which is the combination of the 
     ! input interaction matrix and the nearest neighbour interactions `J_1`.
     allocate( J_matrix_out(S%Nsites,S%Nsites) )   
 
-    ! ! ! REMOVE
-    ! ! Interaction matrix with FM next-nearest neighbour interactions
-    ! J_matrix_out(:,:) = 0.0_dp
-    ! do ir = 1, S%Nsites
-    !     do jr = 1, S%Nsites
-    !         do k = S%coord+1, 2*S%coord 
-    !             if (neigh(k, ir) == jr) then ! next-nearest neighbours 
-    !               J_matrix_out(ir, jr) = -0.1_dp
-    !             endif 
-    !         enddo
-    !     enddo         
-    ! enddo       
-    ! open(101, file="Jmatrix_nnFM.dat", status="unknown", action="write")
-    ! do ir = 1, n_sites
-    !     write(101, *) ( J_matrix_out(ir, jr), jr = 1, n_sites )
-    ! enddo 
-    ! close(101)
+    ! ! REMOVE
+    ! Interaction matrix with FM next-nearest neighbour interactions
+    J_matrix_out(:,:) = 0.0_dp
+    do ir = 1, S%Nsites
+        do jr = 1, S%Nsites
+            do k = 1, S%coord ! S%coord + 1, 2*S%coords  => next-nearest neighbours 
+                if (neigh(k, ir) == jr) then ! nearest neighbours 
+                  J_matrix_out(ir, jr) = -1.0_dp !-0.1_dp
+                endif 
+            enddo
+        enddo         
+    enddo       
+    open(101, file="Jmatrix_nnAFM.txt", status="unknown", action="write")
+    do ir = 1, n_sites
+        write(101, *) ( J_matrix_out(ir, jr), jr = 1, n_sites )
+    enddo 
+    close(101)
     J_matrix_out(:,:) = 0.0_dp
     ! REMOVE
+
     J_matrix_out(:,:) = J_interaction_matrix(:,:)
     do ir = 1, S%Nsites
         do jr = 1, S%Nsites
@@ -358,6 +372,25 @@ program ssetfi
         ! IMPROVE: deallocate( J_interaction_matrix )
     endif 
 
+    ! read the site-dependent longitudinal fields from file 
+    ! unless this fiel is to be ignored 
+    allocate( hz_fields(1:S%Nsites) )
+    if( ignore_hz_fields ) then 
+        hz_fields(:) = hz
+    else
+        if( MPI_rank == root_rank ) then 
+            open(200, file=trim(hz_fields_file), action="read", status="old")
+            do i = 1, S%Nsites 
+                read(200, *) hz_fields(i)
+            enddo
+            close(200)
+        endif 
+#if defined(USE_MPI)
+        call MPI_BCAST( hz_fields, size(hz_fields), &
+            MPI_DOUBLE, root_rank, MPI_COMM_WORLD, ierr )
+#endif 
+    endif
+
     ! seed random number generator with the system time (at the millisecond level)
     call init_RNG(MPI_rank, DETERMINISTIC=deterministic) 
 
@@ -365,7 +398,8 @@ program ssetfi
     ! will be sampled. 
     call init_probtables( S=S, J_interaction_matrix=J_interaction_matrix, &
         hx=hx, probtable=probtable, J_1=J_1, &
-        n_plaquettes=size(plaquettes,dim=1), TRANSLAT_INV=translat_invar)
+        n_plaquettes=size(plaquettes,dim=1), TRANSLAT_INV=translat_invar, &
+        hz_fields=hz_fields, C_par_hyperparam=C_par_hyperparam)
     ! J_interaction_matrix is not needed anymore.
     if( allocated(J_interaction_matrix) ) deallocate( J_interaction_matrix )
 
@@ -375,8 +409,8 @@ program ssetfi
     do iit = 1, ntherm_step    
         call one_MCS_plaquette( S=S, beta=beta, Jij_sign=Jij_sign, TRANSLAT_INVAR=translat_invar, &
             spins=spins, opstring=opstring, config=config, probtable=probtable, &
-            plaquettes=plaquettes, vertexlink=vertexlink, &
-            leg_visited=leg_visited )
+            plaquettes=plaquettes, vertexlink=vertexlink, leg_visited=leg_visited, &
+            hz_fields=hz_fields, C_par_hyperparam=C_par_hyperparam )
 
         if ( (float(config%n_exp) / float(config%LL)) > 2.0_dp / 3.0_dp ) then 
             print*, "Extending cutoff LL_old=",  config%LL
@@ -393,8 +427,8 @@ program ssetfi
     do iim = 1, nmeas_step
         call one_MCS_plaquette( S=S, beta=beta, Jij_sign=Jij_sign, TRANSLAT_INVAR=translat_invar, &
             spins=spins, opstring=opstring, config=config, probtable=probtable, &
-            plaquettes=plaquettes, vertexlink=vertexlink, &
-            leg_visited=leg_visited )
+            plaquettes=plaquettes, vertexlink=vertexlink, leg_visited=leg_visited, &
+            hz_fields=hz_fields, C_par_hyperparam=C_par_hyperparam )
         call Phys_Measure(P0, S, Kgrid, MatsuGrid, config, spins, opstring, &
             beta, probtable%consts_added, heavy_use=heavy_use)
 
@@ -411,7 +445,7 @@ program ssetfi
     call Phys_GetErr(P0)
 
     call Phys_Print(P0=P0, Kgrid=Kgrid, S=S, MatsuGrid=MatsuGrid, hx=hx, &
-            temp=temp, heavy_use=heavy_use)
+            temp=temp, hz=hz, heavy_use=heavy_use)
 
     call deallocate_globals
 
