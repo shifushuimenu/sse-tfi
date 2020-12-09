@@ -14,7 +14,11 @@ public quantum_cluster_update_plaquette
 integer, parameter :: UP=+1, DOWN=-1
 ! for triangular-plaquette based update 
 integer, parameter :: A_LEG=1, B_LEG=2, C_LEG=3
-real(dp) :: wratio_exchange_field = 1.0
+
+! Total weight ratio for all flipped clusters
+! due to the exchange field as a result of a 
+! longitudinal field. 
+real(dp) :: wratio_exchange_field
 
 contains 
 
@@ -43,7 +47,7 @@ pure function gleg_to_ir(op, gleg) result(ir)
     
     ip = (gleg-1) / MAX_GHOSTLEGS + 1
     vleg = mod(gleg-1, MAX_GHOSTLEGS) + 1
-    vleg_mod = mod(vleg-1, MAX_GHOSTLEGS/2) + 1
+    vleg_mod = mod(vleg-1, MAX_GHOSTLEGS_HALF) + 1
     
     select case( op%optype )
         case(TRIANGULAR_PLAQUETTE)
@@ -92,7 +96,7 @@ pure function leg_direction(gleg) result(dir)
     ip = (gleg-1) / MAX_GHOSTLEGS + 1
     vleg = mod(gleg-1, MAX_GHOSTLEGS) + 1
 
-    if( vleg > MAX_GHOSTLEGS/2 ) then 
+    if( vleg > MAX_GHOSTLEGS_HALF ) then 
         dir = UP
     else 
         dir = DOWN
@@ -107,10 +111,12 @@ subroutine quantum_cluster_update_plaquette( &
 ! Purpose:
 ! --------
 ! Swendsen-Wang variant of the quantum cluster update.
+! 
 ! For longitudinal field `hz` = 0:     
 ! Build all clusters, which is a deterministic process,
 ! and flip each cluster with probability 1/2. 
-! For longitudinal field `hz` != 0:     
+!
+! For `hz` != 0:     
 ! Flip each cluster with probability 1/2 and accept the final
 ! configuration with Metropolis acceptance rate according to 
 ! the exchange fields of all flipped cluster. 
@@ -131,6 +137,7 @@ real(dp), intent(in)                :: C_par_hyperparam  ! hyperparameter for al
 
     
 ! ... Local variables ...
+type(t_BondOperator) :: old_opstring(size(opstring))
 type(t_Stack) :: stack
 integer :: smallest_unvisited_leg
 logical :: LEGS_TO_BE_PROCESSED
@@ -157,11 +164,6 @@ real(dp) :: prob
 integer :: leg_start, leg, leg_next
 integer :: dir 
 integer :: ip, ir, l  
-
-! Total weight ratio for all flipped clusters
-! due to the exchange field as a result of a 
-! longitudinal field. 
-! real(dp) :: wratio_exchange_field
 
 #ifdef DEBUG_CLUSTER_UPDATE
 integer :: spins2(size(spins,dim=1))
@@ -202,6 +204,9 @@ enddo
 ! due to the exchange field as a result of a 
 ! longitudinal field.
 wratio_exchange_field = 1.0_dp
+! Copy the operator string in order to restore it 
+! after a rejected cluster update 
+old_opstring(:) = opstring(:)
 
 do while( LEGS_TO_BE_PROCESSED )
 
@@ -257,10 +262,8 @@ do while( LEGS_TO_BE_PROCESSED )
             leg_visited(leg_next) = .TRUE.                        
             call process_leg( gleg=leg_next, FLIPPING=FLIPPING, opstring=opstring, &
                 stack=stack, leg_visited=leg_visited, touched=touched, &
-                hz_fields=hz_fields, C_par_hyperparam=C_par_hyperparam )            
-            
+                hz_fields=hz_fields, C_par_hyperparam=C_par_hyperparam )                        
         endif 
-
     enddo
 
     ! Which legs have not been processed yet ?
@@ -288,8 +291,8 @@ enddo
 call random_number(prob)
 
 if( prob < wratio_exchange_field ) then 
-    ! Accept the flipped clusters
-    ! Update the initial spin configuration 
+    ! Accept the flipped clusters and 
+    ! update the initial spin configuration 
 #ifdef DEBUG_CLUSTER_UPDATE
     print*, "At the very end, flipping all winding macrospins."
 #endif 
@@ -298,22 +301,22 @@ if( prob < wratio_exchange_field ) then
             spins(ir) = -spins(ir)
         endif
     enddo
+    ! Flip all spins that are not part of a cluster with probability 1/2.
+    do ir = 1, config%n_sites
+        if (.not.touched(ir)) then
+          call random_number(prob)
+          if( prob.le. ONE_HALF ) then
+            spins(ir) = -spins(ir)
+          endif    
+        endif
+    enddo    
 else
     ! Reject the flipping of all clusters. 
-    ! The previous spin configuration remains untouched and 
-    ! all changes to the operator list are unimportant because 
-    ! a new diagonal update will generate a new operator string.
+    !? The previous spin configuration remains untouched and 
+    !? all changes to the operator list are unimportant because 
+    !? a new diagonal update will generate a new operator string.
+    opstring(:) = old_opstring(:)
 endif 
-
-! Flip all spins that are not part of a cluster with probability 1/2.
-do ir = 1, config%n_sites
-  if (.not.touched(ir)) then
-    call random_number(prob)
-    if( prob.le. ONE_HALF ) then
-      spins(ir) = -spins(ir)
-    endif    
-  endif
-enddo
 
 #ifdef DEBUG_CLUSTER_UPDATE
 ! Output the final SSE configuration after all custers have been built
@@ -400,7 +403,6 @@ vleg = mod(gleg-1, MAX_GHOSTLEGS) + 1
 ! that are not touched by any operator, form a cluster by themselves
 ! and can be flipped with probability 1/2. 
 i1 = opstring(ip)%i
-
 dir = leg_direction(gleg)
 
 operator_types: select case( opstring(ip)%optype )
@@ -415,7 +417,7 @@ operator_types: select case( opstring(ip)%optype )
         ! are those described in Ref. [1] 
         touched((/abs(i1), abs(i2), abs(i3)/)) = .TRUE.
 
-        vleg_mod = mod(vleg-1, MAX_GHOSTLEGS/2) + 1
+        vleg_mod = mod(vleg-1, MAX_GHOSTLEGS_HALF) + 1
         ! Whether an update is an A-update, B-update, or C-update
         ! is determined (in the current implementation) during the 
         ! diagonal update where the components of opstring(:) 
@@ -589,23 +591,36 @@ operator_types: select case( opstring(ip)%optype )
         touched(i1) = .TRUE.
 
     case( LONGITUDINAL )
+        ! The leg is connected to a longitudinal field operator. 
+        ! The cluster does NOT stop, i.e. put the other leg onto
+        ! the stack. Accumulate the product of the weight ratios
+        ! due to the exchange field that arises if the cluster is flipped.
+        ! dir = +1 => UP; dir = -1 => DOWN 
+        leg2 = gleg - dir * MAX_GHOSTLEGS_HALF
+
+        call stack%push(leg2)
+        leg_visited(leg2) = .true.
+        touched(i1) = .true.    
+
         if( FLIPPING ) then 
-            ! For longitudinal operators, the structure components 
+            ! For longitudinal operators, the structure component
             ! opstring(ip)%k is used to store the spin state before 
             ! flipping the cluster 
-
             spin_z =  opstring(ip)%k 
-
             if( spin_z * hz_fields(i1) .ge. 0) then 
-                ! spin aligned with the field 
+                ! spin aligned with the field:
+                ! accumulate weight ratio weight_new / weight_old 
                 wratio_exchange_field = wratio_exchange_field &
                     * C_par_hyperparam / (TWO * abs(hz_fields(i1)) + C_par_hyperparam)
             else 
                 wratio_exchange_field = wratio_exchange_field &
                     * (TWO * abs(hz_fields(i1)) + C_par_hyperparam) / C_par_hyperparam
             endif 
-        endif 
-        touched(i1) = .TRUE.        
+            ! Convert (hz,aligned) into (hz,antialigned) vertex and vice versa.
+            ! Note: (hz,aligned) and (hz,antialigned) are two different vertices with 
+            !       different weights. 
+            opstring(ip)%k = -opstring(ip)%k
+        endif     
 
     case default
         print*, "cluster update: strange operator detected"

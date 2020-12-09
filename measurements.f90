@@ -315,6 +315,7 @@ module measurements
         logical, intent(in) :: heavy_use
 
         ! ... Local variables ...
+        integer :: optype 
         real(dp) :: energy, magnz, magnz2
         complex(dp) :: COparam_                  ! complex clock order parameter 
         real(dp) :: COparam                      ! absolute value of the clock order parameter
@@ -346,7 +347,7 @@ module measurements
         factor = ONE / float(LL)
 
         ! sublattice phases for clock order parameter 
-        COphase = (/cmplx(1.0, 0.0), cmplx(-0.5, sqrt(3.0)/2.0), cmplx(-0.5, -sqrt(3.0)/2.0) /)
+        COphase = (/ cmplx(1.0, 0.0), cmplx(-0.5, sqrt(3.0)/2.0), cmplx(-0.5, -sqrt(3.0)/2.0) /)
 
         magnz = 0.0_dp
         magnz2 = 0.0_dp
@@ -355,8 +356,9 @@ module measurements
             l_nochange = l_nochange + 1
             i1 = opstring(ip)%i
             i2 = opstring(ip)%j
+            optype = opstring(ip)%optype
             ! Propagate spins as spin-flip operators are encountered.
-            if ((i1.ne.0).and.(i2.eq.0)) then
+            if ( optype == SPIN_FLIP ) then
                 ! At propagation steps between spin-flip operators the spin configuration
                 ! does not change. Count for how many propagation steps the spin configuration 
                 ! stays constant (=l_nochange) and weight the spin config before the next 
@@ -402,9 +404,10 @@ module measurements
         P0%meas(:, P0%ac_time) = P0%meas(:, P0%ac_time) + P0%meas(:, tmp_idx)**2
 
 
-        ! open(100, file='TS.dat', position='append', status='unknown')
-        ! write(100, *) energy, magnz, magnz2, spins2binrep(spins), COparam
-        ! close(100)   
+        open(100, file='TS.dat', position='append', status='unknown')
+        write(100, *) energy, magnz, magnz2, spins2binrep(spins), COparam, config%n2leg_hz, &
+            config%n2leg, config%n4leg, config%n_exp
+        close(100)   
 
         if( heavy_use ) then 
             call measure_SzSzTimeCorr(Matsu=MatsuGrid, Kgrid=Kgrid, config=config, S=S, &

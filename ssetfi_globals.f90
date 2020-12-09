@@ -12,6 +12,7 @@ module ssetfi_globals
     real(dp), allocatable :: J_interaction_matrix(:,:)
     real(dp), allocatable :: J_translat_invar(:,:)
     integer, allocatable  :: Jij_sign(:,:)
+    integer, allocatable  :: hz_fields_sign(:)
     real(dp), allocatable :: hz_fields(:)
     type(t_ProbTable) :: probtable 
         

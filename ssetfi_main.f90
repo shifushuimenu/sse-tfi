@@ -14,9 +14,9 @@ module ssetfi_main
 
     contains
 
-subroutine one_MCS_plaquette(S, beta, Jij_sign, TRANSLAT_INVAR, spins, opstring, &
-                config, probtable, plaquettes, vertexlink, leg_visited, &
-                hz_fields, C_par_hyperparam)
+subroutine one_MCS_plaquette(S, beta, Jij_sign, hz_fields_sign, TRANSLAT_INVAR, &
+                spins, opstring, config, probtable, plaquettes, vertexlink, &
+                leg_visited, hz_fields, C_par_hyperparam)
     ! Purpose:
     ! --------
     ! Perform one Monte-Carlo step (MCS), consisting of 
@@ -30,6 +30,7 @@ subroutine one_MCS_plaquette(S, beta, Jij_sign, TRANSLAT_INVAR, spins, opstring,
     type(Struct), intent(in) :: S
     real(dp), intent(in) :: beta
     integer, allocatable, intent(in) :: Jij_sign(:,:)
+    integer, allocatable, intent(in) :: hz_fields_sign(:)
     logical, intent(in) :: translat_invar
     integer, allocatable, intent(inout) :: spins(:)
     type(t_BondOperator), allocatable, intent(inout) :: opstring(:)    
@@ -47,16 +48,16 @@ subroutine one_MCS_plaquette(S, beta, Jij_sign, TRANSLAT_INVAR, spins, opstring,
     do ut = 111, 113, 1
         ! loop over A-update (=111), B-update (=112) and C-update (=113)
         call diagonal_update_plaquette(S=S, beta=beta, &
-            Jij_sign=Jij_sign, spins=spins, opstring=opstring, &
+            Jij_sign=Jij_sign, hz_fields_sign=hz_fields_sign, spins=spins, opstring=opstring, &
             config=config, probtable=probtable, plaquettes=plaquettes,&
             update_type=ut, TRANSLAT_INVAR=translat_invar)
-        call build_linkedlist_plaquette( &
-            opstring=opstring, config=config, &
-            vertexlink=vertexlink, leg_visited=leg_visited )        
-        call quantum_cluster_update_plaquette( &
-            spins=spins, opstring=opstring, vertexlink=vertexlink, &
-            leg_visited=leg_visited, config=config, &
-            hz_fields=hz_fields, C_par_hyperparam=C_par_hyperparam )
+        ! call build_linkedlist_plaquette( &
+        !     opstring=opstring, config=config, &
+        !     vertexlink=vertexlink, leg_visited=leg_visited )        
+        ! call quantum_cluster_update_plaquette( &
+        !     spins=spins, opstring=opstring, vertexlink=vertexlink, &
+        !     leg_visited=leg_visited, config=config, &
+        !     hz_fields=hz_fields, C_par_hyperparam=C_par_hyperparam )
     enddo
 
 end subroutine 
@@ -88,7 +89,7 @@ subroutine init_SSEconfig_hostart( S, LL, config, &
     config%n4leg = 0 
     config%n6leg = 0
     config%n_ghostlegs = MAX_GHOSTLEGS*config%LL
-    config%n_legs = 2*config%n2leg+4*config%n4leg+6*config%n6leg
+    config%n_legs = 2*config%n2leg+2*config%n2leg_hz+4*config%n4leg+6*config%n6leg
 
     allocate(opstring(LL))
     do ip=1, LL
@@ -125,13 +126,15 @@ program ssetfi
     use ssetfi_globals
     use ssetfi_main
     use MPI_parallel
-    use util, only: init_RNG
+    use util
     use tau_embedding 
     implicit none 
 
-    ! ****************************************
-    ! simulation parameters                  !
-    ! ***********************************************
+    ! **************************************************
+    ! simulation parameters:           
+    ! ----------------------
+    ! Their values are overwritten from the input file.
+    ! **************************************************
     REAL(dp) :: J_1 = +1.0_dp    
     real(dp) :: hx = 0.60_dp       ! transverse field (in units of J_1)
     real(dp) :: temp = 0.1_dp      ! temperature (in units of J_1)
@@ -157,7 +160,7 @@ program ssetfi
 
     ! Imaginary time correlations 
     type(t_MatsuGrid)  :: MatsuGrid
-    ! ***********************************************
+    ! **************************************************
 
     type(Phys) :: P0
     type(Struct) :: S
@@ -192,7 +195,6 @@ program ssetfi
     ! Check that MPI works correctly
     print*, "My MPI_rank is rank=", MPI_rank, "of size=", MPI_size
 
-
     OPEN( UNIT=5, FILE='simparams.in', ACTION="read", STATUS="old", IOSTAT=ioerr)
     IF( ioerr /=0 ) STOP "File simparams.in could not be opened."
     print*, "reading params"
@@ -206,6 +208,7 @@ program ssetfi
         print*, "Exiting ..."
         stop
     endif 
+    call assert( C_par_hyperparam >=0.0_dp )
 
     if(trim(paramscan) == "parampoint") then 
         print*, "Simulating hx=", hx, "temp=", temp
@@ -391,7 +394,16 @@ program ssetfi
 #endif 
     endif
 
-    ! seed random number generator with the system time (at the millisecond level)
+    allocate(hz_fields_sign(1:size(hz_fields)))
+    where( hz_fields >= 0 ) 
+        hz_fields_sign = +1
+    elsewhere
+        hz_fields_sign = -1
+    endwhere
+
+    ! seed random number generator:
+    !  - with a fixed seed or 
+    !  - with the system time (at the millisecond level)
     call init_RNG(MPI_rank, DETERMINISTIC=deterministic) 
 
     ! Precompute the probability tables from which diagonal operators 
@@ -406,10 +418,14 @@ program ssetfi
     call init_SSEconfig_hostart( S=S, LL=10, config=config, &
         opstring=opstring, spins=spins, vertexlink=vertexlink, leg_visited=leg_visited )
 
+    ! REMOVE
+    spins(:) = +1
+    ! REMOVE
+
     do iit = 1, ntherm_step    
-        call one_MCS_plaquette( S=S, beta=beta, Jij_sign=Jij_sign, TRANSLAT_INVAR=translat_invar, &
-            spins=spins, opstring=opstring, config=config, probtable=probtable, &
-            plaquettes=plaquettes, vertexlink=vertexlink, leg_visited=leg_visited, &
+        call one_MCS_plaquette( S=S, beta=beta, Jij_sign=Jij_sign, hz_fields_sign=hz_fields_sign, &
+            TRANSLAT_INVAR=translat_invar, spins=spins, opstring=opstring, config=config, & 
+            probtable=probtable, plaquettes=plaquettes, vertexlink=vertexlink, leg_visited=leg_visited, &
             hz_fields=hz_fields, C_par_hyperparam=C_par_hyperparam )
 
         if ( (float(config%n_exp) / float(config%LL)) > 2.0_dp / 3.0_dp ) then 
@@ -425,9 +441,9 @@ program ssetfi
     call system_clock(count=t1)
 
     do iim = 1, nmeas_step
-        call one_MCS_plaquette( S=S, beta=beta, Jij_sign=Jij_sign, TRANSLAT_INVAR=translat_invar, &
-            spins=spins, opstring=opstring, config=config, probtable=probtable, &
-            plaquettes=plaquettes, vertexlink=vertexlink, leg_visited=leg_visited, &
+        call one_MCS_plaquette( S=S, beta=beta, Jij_sign=Jij_sign, hz_fields_sign=hz_fields_sign, &
+            TRANSLAT_INVAR=translat_invar, spins=spins, opstring=opstring, config=config, & 
+            probtable=probtable, plaquettes=plaquettes, vertexlink=vertexlink, leg_visited=leg_visited, &
             hz_fields=hz_fields, C_par_hyperparam=C_par_hyperparam )
         call Phys_Measure(P0, S, Kgrid, MatsuGrid, config, spins, opstring, &
             beta, probtable%consts_added, heavy_use=heavy_use)
@@ -437,6 +453,7 @@ program ssetfi
         endif 
     enddo
 
+    ! IMPROVE: Add cluster statistics here (distribution of cluster sizes)
     call system_clock(count=t2, count_rate=rate)
     open(unit=777, file="log_ncpu"//chr_rank//".log", status="Unknown", position="rewind")
     write(777,*) "Running time per measurement MCS: ", (t2 - t1) / real(rate) / real(nmeas_step), "(seconds)"

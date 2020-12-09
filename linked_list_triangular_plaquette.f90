@@ -24,7 +24,7 @@ subroutine build_linkedlist_plaquette( &
 !---------------------------------------------------------------!
 ! convention for numbering of vertex legs (`vleg`):             !
 !                                                               !
-!   Ising operator:		Spin-flip operator or constant:           !
+!   Ising operator:		Spin-flip operator or constant or longitudinal hz:          
 !  (4)           (5)  [3,6]           (4)   [2,3,5,6]           !
 !   |_____________|                    |                        !
 !   |             |                    |                        !
@@ -200,7 +200,8 @@ do ip=1, config%LL
     case( TWO_LEG )
     ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     ! Two-leg vertex, i.e.
-    ! spin-flip operator or constant operator at i1
+    ! spin-flip operator or constant operator or 
+    ! longitudinal field at i1
     ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
       ! lower leg
       if( lastleg(i1).ne.0 ) then
