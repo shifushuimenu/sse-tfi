@@ -289,7 +289,6 @@ enddo
 
 ! AT THE VERY END, WHEN ALL CLUSTERS HAVE BEEN BUILT...
 call random_number(prob)
-
 if( prob < wratio_exchange_field ) then 
     ! Accept the flipped clusters and 
     ! update the initial spin configuration 
@@ -603,11 +602,12 @@ operator_types: select case( opstring(ip)%optype )
         touched(i1) = .true.    
 
         if( FLIPPING ) then 
-            ! For longitudinal operators, the structure component
-            ! opstring(ip)%k is used to store the spin state before 
-            ! flipping the cluster 
-            spin_z =  opstring(ip)%k 
-            if( spin_z * hz_fields(i1) .ge. 0) then 
+            ! For longitudinal field (`hz`) operators, the structure component
+            ! opstring(ip)%k is used to store whether the hz operator 
+            ! is aligned with the spin it is sitting on or not. opstring(ip)%k = +1(-1) means
+            ! aligned (anti-aligned).
+            spin_z = opstring(ip)%k
+            if( spin_z * hz_fields(i1) >= 0 ) then 
                 ! spin aligned with the field:
                 ! accumulate weight ratio weight_new / weight_old 
                 wratio_exchange_field = wratio_exchange_field &

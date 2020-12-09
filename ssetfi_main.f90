@@ -51,13 +51,13 @@ subroutine one_MCS_plaquette(S, beta, Jij_sign, hz_fields_sign, TRANSLAT_INVAR, 
             Jij_sign=Jij_sign, hz_fields_sign=hz_fields_sign, spins=spins, opstring=opstring, &
             config=config, probtable=probtable, plaquettes=plaquettes,&
             update_type=ut, TRANSLAT_INVAR=translat_invar)
-        ! call build_linkedlist_plaquette( &
-        !     opstring=opstring, config=config, &
-        !     vertexlink=vertexlink, leg_visited=leg_visited )        
-        ! call quantum_cluster_update_plaquette( &
-        !     spins=spins, opstring=opstring, vertexlink=vertexlink, &
-        !     leg_visited=leg_visited, config=config, &
-        !     hz_fields=hz_fields, C_par_hyperparam=C_par_hyperparam )
+        call build_linkedlist_plaquette( &
+            opstring=opstring, config=config, &
+            vertexlink=vertexlink, leg_visited=leg_visited )        
+        call quantum_cluster_update_plaquette( &
+            spins=spins, opstring=opstring, vertexlink=vertexlink, &
+            leg_visited=leg_visited, config=config, &
+            hz_fields=hz_fields, C_par_hyperparam=C_par_hyperparam )
     enddo
 
 end subroutine 
@@ -279,6 +279,9 @@ program ssetfi
             enddo
             close(100)
         endif
+        ! REMOVE BACK
+        J_interaction_matrix(:,:) = ZERO
+        ! REMOVE BACK
 #if defined(USE_MPI)        
         ! IMPROVE: replace MPI_DOUBLE in some way by real(dp) so that 
         ! the code does not break if dp is set to single precision 
@@ -417,10 +420,6 @@ program ssetfi
 
     call init_SSEconfig_hostart( S=S, LL=10, config=config, &
         opstring=opstring, spins=spins, vertexlink=vertexlink, leg_visited=leg_visited )
-
-    ! REMOVE
-    spins(:) = +1
-    ! REMOVE
 
     do iit = 1, ntherm_step    
         call one_MCS_plaquette( S=S, beta=beta, Jij_sign=Jij_sign, hz_fields_sign=hz_fields_sign, &

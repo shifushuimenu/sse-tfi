@@ -92,7 +92,8 @@ integer :: optype
 integer :: plaq_idx
 
 real(dp) :: P_plus, P_minus, P_add, P_remove
-real(dp) :: prob, eta, prob_insert
+real(dp) :: prob, eta
+integer :: alignment 
 
 ! propagated spin configuration at a given propagation step
 integer, allocatable :: spins2(:) 
@@ -298,21 +299,27 @@ if( (i1 == 0).and.(i2 == 0) ) then
      ! MISSING: sample positions for inhomogeneous fields
      ! based on hz_fields(:) 
 
-     ! Insert with heat bath probabilities an aligned or antialigned 
-     ! `hz` vertex, i.e. depending on the spin alignment. 
-     ! (Of course, it is possible that no hz vertex is inserted.)
-     if( spins2(i1) == hz_fields_sign(i1) ) then
-        prob_insert = probtable%hz_insert_aligned(i1)
-     else ! spin at the propagation step is not aligned with the longitudinal field 
-        prob_insert = 1.0_dp - probtable%hz_insert_aligned(i1)
-     endif 
+     ! Choose between an aligned or antialigned 
+     ! `hz` vertex according to the strength and orientation of the field,
+     ! but independently of the spin alignment. 
      call random_number(eta)
-     if( eta < prob_insert) then 
+     if ( eta <= probtable%hz_insert_aligned(i1) ) then
+        alignment = +1
+     else
+        alignment = -1
+     endif 
+     !  if( spins2(i1) == hz_fields_sign(i1) ) then
+     !     prob_insert = probtable%hz_insert_aligned(i1)
+     !  else ! spin at the propagation step is not aligned with the longitudinal field 
+     !     prob_insert = 1.0_dp - probtable%hz_insert_aligned(i1)
+     !  endif      
+
+     ! (Of course, it is possible that no hz vertex is inserted.)     
+     if( spins2(i1) == alignment * hz_fields_sign(i1) ) then 
         opstring(ip)%optype = LONGITUDINAL 
         opstring(ip)%i = i1
         opstring(ip)%j = -i1 ! actually, not necessary to set this entry 
-        opstring(ip)%k = spins2(i1)  ! spin state is needed in the cluster update to accumulate the exchange fields 
-                                     ! IMPROVE: We actually only need to know whether the hz vertex is aligned with the spin 
+        opstring(ip)%k = spins2(i1)   ! The spin state is needed in the cluster update to accumulate the exchange fields 
 
         config%n_exp = config%n_exp + 1; config%n2leg_hz = config%n2leg_hz + 1 
         ! update P_add and  P_remove
@@ -320,6 +327,8 @@ if( (i1 == 0).and.(i2 == 0) ) then
             / ( float(config%LL- config%n_exp + 1) + beta*probtable%sum_all_diagmatrix_elements )
         P_add = beta*probtable%sum_all_diagmatrix_elements &
             / ( float(config%LL-config%n_exp) + beta*probtable%sum_all_diagmatrix_elements )
+     else
+        ! Don't insert any operator. 
      endif 
 
   case default
@@ -603,7 +612,6 @@ consts_added_per_opclass(3) = cc
 ! `n_opclass` classes. 
 prob_opclass(:) = sum_all_diagmatrix_elements_peropclass(:) / sum(sum_all_diagmatrix_elements_peropclass(:))
 call assert( all(prob_opclass >= 0.0_dp), "neg. probs. in prob_opclass" )
-call assert( sum(prob_opclass) == 1.0_dp )
 
 ! Cumulative probabilities for sampling
 allocate(probtable%cumprob_opclass(1:n_opclass))
@@ -709,17 +717,20 @@ endif
 end subroutine     
 
 subroutine extend_cutoff(opstring, config)
-!****************************************************************
+! Purpose:
+! ---------
 ! Extend the cut-off of the fixed length operator string to
 !   LL_new = n_exp + n_exp / 2. 
-!****************************************************************
+! 
   use SSE_configuration 
   use types 
   implicit none 
-
+! Arguments:
+! ---------_
   type(t_BondOperator), allocatable, intent(inout) :: opstring(:)
   type(t_Config), intent(inout) :: config 
   
+! ... Local variables ...
   logical, allocatable :: p_taken(:)
   type(t_BondOperator), allocatable :: opstring_new(:)
   integer :: LL, LL_new, n_exp_new

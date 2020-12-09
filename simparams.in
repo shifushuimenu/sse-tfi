@@ -73,7 +73,7 @@
 &SIMPARAMS
 J_1 		= 0.0    ! +1.0
 hx  		= 1.0  ! hx > 0 required
-hz          = 0.1  ! hz \in [-\infty, +\infty]; homogeneous longitundinal field
+hz          = 1.0  ! hz \in [-\infty, +\infty]; homogeneous longitundinal field
 temp 		= 0.1
 nx   		= 3
 ny   		= 3
@@ -84,7 +84,7 @@ Jmatrix_file = "Jmatrix_nnFM.txt" !"Jmatrix_kagome2x2_FM.dat"  !"Jmatrix_nnFM.da
 translat_invar = F
 ignore_hz_fields = T
 hz_fields_file = "hz_fields.txt"
-C_par_hyperparam = 0.0
+C_par_hyperparam = 0.2
 ntherm_step = 1000
 nmeas_step  = 10000
 Nbin        = 10
