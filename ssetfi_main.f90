@@ -279,9 +279,6 @@ program ssetfi
             enddo
             close(100)
         endif
-        ! REMOVE BACK
-        J_interaction_matrix(:,:) = ZERO
-        ! REMOVE BACK
 #if defined(USE_MPI)        
         ! IMPROVE: replace MPI_DOUBLE in some way by real(dp) so that 
         ! the code does not break if dp is set to single precision 
