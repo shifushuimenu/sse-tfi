@@ -51,13 +51,13 @@ subroutine one_MCS_plaquette(S, beta, Jij_sign, hz_fields_sign, TRANSLAT_INVAR, 
             Jij_sign=Jij_sign, hz_fields_sign=hz_fields_sign, spins=spins, opstring=opstring, &
             config=config, probtable=probtable, plaquettes=plaquettes,&
             update_type=ut, TRANSLAT_INVAR=translat_invar)
-        call build_linkedlist_plaquette( &
-            opstring=opstring, config=config, &
-            vertexlink=vertexlink, leg_visited=leg_visited )        
-        call quantum_cluster_update_plaquette( &
-            spins=spins, opstring=opstring, vertexlink=vertexlink, &
-            leg_visited=leg_visited, config=config, &
-            hz_fields=hz_fields, C_par_hyperparam=C_par_hyperparam )
+        ! call build_linkedlist_plaquette( &
+        !     opstring=opstring, config=config, &
+        !     vertexlink=vertexlink, leg_visited=leg_visited )        
+        ! call quantum_cluster_update_plaquette( &
+        !     spins=spins, opstring=opstring, vertexlink=vertexlink, &
+        !     leg_visited=leg_visited, config=config, &
+        !     hz_fields=hz_fields, C_par_hyperparam=C_par_hyperparam )
     enddo
 
 end subroutine 
