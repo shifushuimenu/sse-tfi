@@ -200,24 +200,27 @@ do while(leg_visited(smallest_unvisited_leg))
     endif 
 enddo 
 
-! Total weight ratio for all flipped clusters
-! due to the exchange field as a result of a 
-! longitudinal field.
-wratio_exchange_field = 1.0_dp
-! Copy the operator string in order to restore it 
-! after a rejected cluster update 
-old_opstring(:) = opstring(:)
 
-do while( LEGS_TO_BE_PROCESSED )
+deterministic_cluster_construction: do while( LEGS_TO_BE_PROCESSED )
 
-    ! Swendsen-Wang: flip cluster or not 
-    call random_number(prob)
-    if (prob < ONE_HALF) then 
-        FLIPPING = .TRUE.
-    else
-        FLIPPING = .FALSE.
-    endif 
-    
+    ! ! Swendsen-Wang: flip cluster or not 
+    ! call random_number(prob)
+    ! if (prob < ONE_HALF) then 
+    !     FLIPPING = .TRUE.
+    ! else
+    !     FLIPPING = .FALSE.
+    ! endif 
+
+    ! Weight ratio for flipping the current cluster
+    ! due to the exchange field as a result of a 
+    ! longitudinal field.
+    wratio_exchange_field = 1.0_dp
+    ! Copy the operator string in order to restore it 
+    ! if a cluster flip is rejected  
+    old_opstring(:) = opstring(:)
+    WINDING_MACROSPIN(:) = .false.
+    FLIPPING = .true.
+        
     leg_start = smallest_unvisited_leg    
     call stack%push( leg_start )
     leg_visited( leg_start ) = .TRUE.        
@@ -266,6 +269,25 @@ do while( LEGS_TO_BE_PROCESSED )
         endif 
     enddo
 
+    ! Decide whether to flip the just constructed cluster
+    ! with heat bath probability
+    call random_number(prob)
+    if( prob < wratio_exchange_field / (1.0_dp + wratio_exchange_field) ) then 
+        ! Accept the flipped clusters and 
+        ! update the initial spin configuration.
+#ifdef DEBUG_CLUSTER_UPDATE
+        print*, "flip the winding macrospins."
+#endif 
+        do ir = 1, config%n_sites
+            if (WINDING_MACROSPIN(ir)) then
+                spins(ir) = -spins(ir)
+            endif
+        enddo
+    else
+        ! Reject the flipping of the cluster
+        opstring(:) = old_opstring(:)
+    endif 
+
     ! Which legs have not been processed yet ?
     do l = smallest_unvisited_leg, config%n_ghostlegs + 1
         if( l == config%n_ghostlegs + 1) then 
@@ -279,43 +301,23 @@ do while( LEGS_TO_BE_PROCESSED )
            exit
         endif 
     enddo
-
+    
 #ifdef DEBUG_CLUSTER_UPDATE
-! Output the SSE configuration after each Swendsed-Wang cluster construction
+    ! Output the SSE configuration after each Swendsed-Wang cluster construction
     ! call output_SSE_config(config, opstring, spins, visited_ip, filename="SSEconfig.dat")
 #endif 
 
-enddo
+enddo deterministic_cluster_construction
 
-! AT THE VERY END, WHEN ALL CLUSTERS HAVE BEEN BUILT...
-call random_number(prob)
-if( prob < wratio_exchange_field ) then 
-    ! Accept the flipped clusters and 
-    ! update the initial spin configuration 
-#ifdef DEBUG_CLUSTER_UPDATE
-    print*, "At the very end, flipping all winding macrospins."
-#endif 
-    do ir = 1, config%n_sites
-        if (WINDING_MACROSPIN(ir)) then
-            spins(ir) = -spins(ir)
-        endif
-    enddo
-    ! Flip all spins that are not part of a cluster with probability 1/2.
-    do ir = 1, config%n_sites
-        if (.not.touched(ir)) then
-          call random_number(prob)
-          if( prob.le. ONE_HALF ) then
-            spins(ir) = -spins(ir)
-          endif    
-        endif
-    enddo    
-else
-    ! Reject the flipping of all clusters. 
-    !? The previous spin configuration remains untouched and 
-    !? all changes to the operator list are unimportant because 
-    !? a new diagonal update will generate a new operator string.
-    opstring(:) = old_opstring(:)
-endif 
+        ! Flip all spins that are not part of a cluster with probability 1/2.
+do ir = 1, config%n_sites
+    if (.not.touched(ir)) then
+      call random_number(prob)
+      if( prob.le. ONE_HALF ) then
+        spins(ir) = -spins(ir)
+      endif    
+    endif
+enddo    
 
 #ifdef DEBUG_CLUSTER_UPDATE
 ! Output the final SSE configuration after all custers have been built
@@ -620,8 +622,8 @@ operator_types: select case( opstring(ip)%optype )
             ! Note: (hz,aligned) and (hz,antialigned) are two different vertices with 
             !       different weights. 
             opstring(ip)%k = -opstring(ip)%k
-        endif     
-
+        endif    
+        
     case default
         print*, "cluster update: strange operator detected"
         print*, "ip=", ip, "i1=", opstring(ip)%j, "i2=",i2, "i3=", opstring(ip)%k
