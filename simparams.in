@@ -72,8 +72,8 @@
 ! ========================================================
 &SIMPARAMS
 J_1 		= 0.0    ! +1.0
-hx  		= 0.1  ! hx > 0 required
-hz          = 0.0  ! hz \in [-\infty, +\infty]; homogeneous longitundinal field
+hx  		= 1.0  ! hx > 0 required
+hz          = 0.0  ! hz \in [-\infty, +\infty]; homogeneous longitudinal field
 temp 		= 0.1
 nx   		= 3
 ny   		= 3
@@ -88,9 +88,9 @@ C_par_hyperparam = 0.2
 ntherm_step = 1000
 nmeas_step  = 10000
 Nbin        = 10
-paramscan   = "paramscan_hz"
+paramscan   = "paramscan_hx"
 scan_min    = 0.05
-scan_max    = 2.0
+scan_max    = 10.0
 heavy_use   = F
 deterministic = T
 / 
