@@ -18,6 +18,7 @@ integer, parameter :: A_LEG=1, B_LEG=2, C_LEG=3
 ! Total weight ratio for all flipped clusters
 ! due to the exchange field as a result of a 
 ! longitudinal field. 
+! (module-level variable)
 real(dp) :: wratio_exchange_field
 
 contains 
@@ -203,13 +204,13 @@ enddo
 
 deterministic_cluster_construction: do while( LEGS_TO_BE_PROCESSED )
 
-    ! ! Swendsen-Wang: flip cluster or not 
-    ! call random_number(prob)
-    ! if (prob < ONE_HALF) then 
-    !     FLIPPING = .TRUE.
-    ! else
-    !     FLIPPING = .FALSE.
-    ! endif 
+    ! ! ! ! Swendsen-Wang: flip cluster or not 
+    ! ! ! call random_number(prob)
+    ! ! ! if (prob < ONE_HALF) then 
+    ! ! !     FLIPPING = .TRUE.
+    ! ! ! else
+    ! ! !     FLIPPING = .FALSE.
+    ! ! ! endif 
 
     ! Weight ratio for flipping the current cluster
     ! due to the exchange field as a result of a 
@@ -273,10 +274,11 @@ deterministic_cluster_construction: do while( LEGS_TO_BE_PROCESSED )
     ! with heat bath probability
     call random_number(prob)
     if( prob < wratio_exchange_field / (1.0_dp + wratio_exchange_field) ) then 
+    ! if( prob < wratio_exchange_field ) then 
         ! Accept the flipped clusters and 
         ! update the initial spin configuration.
 #ifdef DEBUG_CLUSTER_UPDATE
-        print*, "flip the winding macrospins."
+        print*, "flip the winding macrospins, weight_ratio=", wratio_exchange_field
 #endif 
         do ir = 1, config%n_sites
             if (WINDING_MACROSPIN(ir)) then
@@ -286,6 +288,9 @@ deterministic_cluster_construction: do while( LEGS_TO_BE_PROCESSED )
     else
         ! Reject the flipping of the cluster
         opstring(:) = old_opstring(:)
+#ifdef DEBUG_CLUSTER_UPDATE        
+        print*, "reject cluster flip, weight_ratio=", wratio_exchange_field
+#endif         
     endif 
 
     ! Which legs have not been processed yet ?
@@ -304,7 +309,7 @@ deterministic_cluster_construction: do while( LEGS_TO_BE_PROCESSED )
     
 #ifdef DEBUG_CLUSTER_UPDATE
     ! Output the SSE configuration after each Swendsed-Wang cluster construction
-    ! call output_SSE_config(config, opstring, spins, visited_ip, filename="SSEconfig.dat")
+    call output_SSE_config(config, opstring, spins, visited_ip, filename="SSEconfig.dat")
 #endif 
 
 enddo deterministic_cluster_construction
@@ -391,7 +396,7 @@ integer :: ip, i1, i2, i3
 integer :: dir 
 integer :: vleg, vleg_mod
 integer :: leg1, leg2, leg3, leg4, leg5 
-integer :: spin_z
+integer :: alignment 
 
 ! Find the operator to which the leg is connected
 ! and which leg it is in a numbering scheme 
@@ -608,15 +613,20 @@ operator_types: select case( opstring(ip)%optype )
             ! opstring(ip)%k is used to store whether the hz operator 
             ! is aligned with the spin it is sitting on or not. opstring(ip)%k = +1(-1) means
             ! aligned (anti-aligned).
-            spin_z = opstring(ip)%k
-            if( spin_z * hz_fields(i1) >= 0 ) then 
+            alignment = opstring(ip)%k
+            if( alignment > 0 ) then 
                 ! spin aligned with the field:
                 ! accumulate weight ratio weight_new / weight_old 
                 wratio_exchange_field = wratio_exchange_field &
                     * C_par_hyperparam / (TWO * abs(hz_fields(i1)) + C_par_hyperparam)
             else 
-                wratio_exchange_field = wratio_exchange_field &
-                    * (TWO * abs(hz_fields(i1)) + C_par_hyperparam) / C_par_hyperparam
+                ! spin not aligned or zero longitudinal field 
+                if (C_par_hyperparam > 0) then 
+                    wratio_exchange_field = wratio_exchange_field &
+                        * (TWO * abs(hz_fields(i1)) + C_par_hyperparam) / C_par_hyperparam
+                else
+                    wratio_exchange_field = 1.0_dp
+                endif 
             endif 
             ! Convert (hz,aligned) into (hz,antialigned) vertex and vice versa.
             ! Note: (hz,aligned) and (hz,antialigned) are two different vertices with 

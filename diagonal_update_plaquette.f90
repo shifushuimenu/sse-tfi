@@ -3,11 +3,13 @@
 !     and array indicating whether a bond is FM or AFM.
 !   - if ( Jij_sign(r(1), r(2)).gt.0 ) then !AFM (line 142) 
 !     => write such that it works also for non-translationally invariant systems
+!   - inhomongeneous longitudinal field, sample in diagonal update w
 
 
 module diagonal_update
   use types
   use util
+
   implicit none 
   private 
 
@@ -29,6 +31,12 @@ type t_ProbTable
   real(dp), allocatable :: cumprob_opclass(:)    ! cumulative sum of the probabilities to insert an operator from a certain class
   integer, allocatable  :: idx_opclass(:)      ! integer indices for operator classes (used in the diagonal update)
   real(dp), allocatable :: hz_insert_aligned(:)  ! ( 2*abs(hz(i)) + C_par ) / ( 2*abs(hz(i)) + 2*C_par )
+
+  ! needed for updating the probability tables 
+  ! whenever the instantaneous spin configuration changes 
+  real(dp), allocatable :: sum_all_diagmatrix_elements_peropclass(:)
+  real(dp), allocatable :: consts_added_per_opclass(:)
+  real(dp), allocatable :: prob_opclass(:)
 end type 
 
   contains 
@@ -52,9 +60,10 @@ pure function choose_diagopclass(eta, probtable) result(optype)
   enddo 
 end function 
 
+
 SUBROUTINE diagonal_update_plaquette( S, beta, Jij_sign, hz_fields_sign, &
      spins, opstring, config, probtable, plaquettes, update_type, &
-     TRANSLAT_INVAR )
+     TRANSLAT_INVAR, hz_fields, C_par_hyperparam )
 ! **************************************************
 ! Attempt to carry out replacements of the kind
 !     id <--> diag. operator
@@ -73,15 +82,17 @@ real(dp), intent(in) :: beta          ! inverse temperature
 integer, allocatable, intent(in) :: Jij_sign(:,:)  ! sign of the interaction bond (i,j): FM (<0) or AFM (>0)
                                       ! Note: If J_ij(i,j) == 0, then the corresponding bond will never be sampled
                                       !       from the cumulative probability table. 
-integer, allocatable, intent(in) :: hz_fields_sign(:)  ! sign of the longitudinal fields: FM (<0) or AFM(>0).
+integer, intent(in) :: hz_fields_sign(:)  ! sign of the longitudinal fields: FM (<0) or AFM(>0).
 integer, intent(in) :: spins(:)
 type(t_BondOperator), intent(inout) :: opstring(:)
 type(t_Config), intent(inout) :: config
-type(t_ProbTable), intent(in) :: probtable
+type(t_ProbTable), intent(inout) :: probtable  ! intent(inout) because probtables can be changed if they depend on instantaneous spin config
 type(t_Plaquette), intent(in) :: plaquettes(:)
 ! if update_type == A_UPDATE => "A-site update
 integer, intent(in) :: update_type   
 logical, intent(in) :: TRANSLAT_INVAR
+real(dp), intent(in) :: C_par_hyperparam
+real(dp), intent(in) :: hz_fields(:) 
 
 ! ... Local variables ...
 integer :: ip, i1, i2, index1, index2, index2_from_origin
@@ -94,6 +105,14 @@ integer :: plaq_idx
 real(dp) :: P_plus, P_minus, P_add, P_remove
 real(dp) :: prob, eta
 integer :: alignment 
+logical :: OP_INSERTED 
+integer :: counter 
+
+! REMOVE
+real(dp) :: norm 
+real(dp) :: cumprob_hz(1:S%Nsites)
+integer :: ir
+! REMOVE
 
 ! propagated spin configuration at a given propagation step
 integer, allocatable :: spins2(:) 
@@ -121,9 +140,9 @@ do ip=1, config%LL
 if( (i1 == 0).and.(i2 == 0) ) then
 
     P_plus = P_add    
-    call random_number(prob)
+    call random_number(eta)
         
-  if( prob <= P_plus ) then
+  if( eta <= P_plus ) then
   ! try to insert an operator  
 
    ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -135,8 +154,8 @@ if( (i1 == 0).and.(i2 == 0) ) then
    ! IMPROVE: maybe make 2-leg CONSTANT a separate class ? 
    
    ! choose with heat bath probability 
-   call random_number(prob)
-   optype = choose_diagopclass(prob, probtable)
+   call random_number(eta)
+   optype = choose_diagopclass(eta, probtable)
    ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
    choose_insert_optype: select case( optype )
@@ -293,43 +312,116 @@ if( (i1 == 0).and.(i2 == 0) ) then
   endif 
   
   case( LONGITUDINAL )
-     ! for homogeneous longitudinal fields
-     call random_number(eta)
-     i1 = int(eta*S%Nsites) + 1
-     ! MISSING: sample positions for inhomogeneous fields
-     ! based on hz_fields(:) 
-
+#ifdef DEBUG_DIAGONAL_UPDATE
+    print*, "insert longitudinal operator"
+#endif 
      ! Choose between an aligned or antialigned 
      ! `hz` vertex according to the strength and orientation of the field,
      ! but independently of the spin alignment. 
-     call random_number(eta)
-     if ( eta <= probtable%hz_insert_aligned(i1) ) then
+
+    !  call random_number(eta)
+    !  i1 = int(eta*S%Nsites) + 1
+    !   ! for homogeneous longitudinal fields
+    !   ! MISSING: sample positions for inhomogeneous fields
+    !   ! based on hz_fields(:)       
+    !  call random_number(eta)
+    !  if ( eta <= probtable%hz_insert_aligned(i1) ) then
+    !     alignment = +1
+    !  else
+    !     alignment = -1
+    !  endif 
+    !  !  if( spins2(i1) == hz_fields_sign(i1) ) then
+    !  !     prob_insert = probtable%hz_insert_aligned(i1)
+    !  !  else ! spin at the propagation step is not aligned with the longitudinal field 
+    !  !     prob_insert = 1.0_dp - probtable%hz_insert_aligned(i1)
+    !  !  endif      
+    !  if ( spins2(i1) == alignment * hz_fields_sign(i1) ) then 
+    !     print*, "insert"
+    !     opstring(ip)%optype = LONGITUDINAL 
+    !     opstring(ip)%i = i1
+    !     opstring(ip)%j = -i1          ! actually, not necessary to set this entry 
+    !     opstring(ip)%k = spins2(i1)   ! The spin state is needed in the cluster update to accumulate the exchange fields 
+
+    !     config%n_exp = config%n_exp + 1; config%n2leg_hz = config%n2leg_hz + 1 
+    !     ! update P_add  and  P_remove
+    !     P_remove = float(( config%LL - config%n_exp + 1)) &
+    !         / ( float(config%LL- config%n_exp + 1) + beta*probtable%sum_all_diagmatrix_elements )
+    !     P_add = beta*probtable%sum_all_diagmatrix_elements &
+    !         / ( float(config%LL-config%n_exp) + beta*probtable%sum_all_diagmatrix_elements )
+    !  else
+    !     print*, "don't insert"
+    !     ! Don't insert any operator. 
+    !  endif 
+
+    norm = 0
+    cumprob_hz(:) = 0.0_dp
+    do ir = 1, S%Nsites 
+      if (spins(ir) == hz_fields_sign(ir)) then
+         norm = norm + probtable%hz_insert_aligned(ir)
+      else 
+         norm = norm + 1.0_dp - probtable%hz_insert_aligned(ir)
+      endif 
+      cumprob_hz(ir) = norm 
+    enddo 
+    cumprob_hz(:) = cumprob_hz(:) / norm
+
+    call random_number(eta)
+    i1 = binary_search(cumprob_hz, eta)
+      
+    if ( spins2(i1) == hz_fields_sign(i1) ) then           
         alignment = +1
-     else
+    else 
         alignment = -1
-     endif 
-     !  if( spins2(i1) == hz_fields_sign(i1) ) then
-     !     prob_insert = probtable%hz_insert_aligned(i1)
-     !  else ! spin at the propagation step is not aligned with the longitudinal field 
-     !     prob_insert = 1.0_dp - probtable%hz_insert_aligned(i1)
-     !  endif      
+    endif 
 
-     ! (Of course, it is possible that no hz vertex is inserted.)     
-     if( spins2(i1) == alignment * hz_fields_sign(i1) ) then 
-        opstring(ip)%optype = LONGITUDINAL 
-        opstring(ip)%i = i1
-        opstring(ip)%j = -i1 ! actually, not necessary to set this entry 
-        opstring(ip)%k = spins2(i1)   ! The spin state is needed in the cluster update to accumulate the exchange fields 
+    opstring(ip)%optype = LONGITUDINAL 
+    opstring(ip)%i = i1
+    opstring(ip)%j = -i1         ! Actually, not necessary to set this entry.
+    opstring(ip)%k = alignment   ! The spin state is needed in the cluster update to accumulate the exchange fields.
 
-        config%n_exp = config%n_exp + 1; config%n2leg_hz = config%n2leg_hz + 1 
-        ! update P_add and  P_remove
-        P_remove = float(( config%LL - config%n_exp + 1)) &
-            / ( float(config%LL- config%n_exp + 1) + beta*probtable%sum_all_diagmatrix_elements )
-        P_add = beta*probtable%sum_all_diagmatrix_elements &
-            / ( float(config%LL-config%n_exp) + beta*probtable%sum_all_diagmatrix_elements )
-     else
-        ! Don't insert any operator. 
-     endif 
+    config%n_exp = config%n_exp + 1; config%n2leg_hz = config%n2leg_hz + 1 
+    ! update P_add  and  P_remove because `sum_all_diagmatrix_elements` depends on the instantaneous spin
+    P_remove = float(( config%LL - config%n_exp + 1)) &
+        / ( float(config%LL- config%n_exp + 1) + beta*probtable%sum_all_diagmatrix_elements )
+    P_add = beta*probtable%sum_all_diagmatrix_elements &
+        / ( float(config%LL-config%n_exp) + beta*probtable%sum_all_diagmatrix_elements )
+
+    ! OP_INSERTED = .false.
+    ! counter = 0
+    ! do while (.not. OP_INSERTED)
+    !   counter = counter + 1 
+    !   print*, "counter=", counter 
+    !   call random_number(eta)
+    !   i1 = int(eta*S%Nsites) + 1
+    !     ! for homogeneous longitudinal fields
+    !     ! MISSING: sample positions for inhomogeneous fields
+    !     ! based on hz_fields(:)       
+    
+    !   if ( spins2(i1) == hz_fields_sign(i1) ) then           
+    !       alignment = +1
+    !       prob = probtable%hz_insert_aligned(i1)
+    !   else 
+    !       alignment = -1
+    !       prob = 1.0_dp - probtable%hz_insert_aligned(i1)
+    !   endif 
+
+    !   call random_number(eta)
+    !   if (eta < prob) then 
+    !       OP_INSERTED = .true.
+    !       opstring(ip)%optype = LONGITUDINAL 
+    !       opstring(ip)%i = i1
+    !       opstring(ip)%j = -i1         ! Actually, not necessary to set this entry.
+    !       opstring(ip)%k = alignment   ! The spin state is needed in the cluster update to accumulate the exchange fields.
+
+    !       config%n_exp = config%n_exp + 1; config%n2leg_hz = config%n2leg_hz + 1 
+    !       ! update P_add  and  P_remove
+    !       P_remove = float(( config%LL - config%n_exp + 1)) &
+    !           / ( float(config%LL- config%n_exp + 1) + beta*probtable%sum_all_diagmatrix_elements )
+    !       P_add = beta*probtable%sum_all_diagmatrix_elements &
+    !           / ( float(config%LL-config%n_exp) + beta*probtable%sum_all_diagmatrix_elements )
+    !   endif 
+    ! enddo
+
 
   case default
       print*, "Diagonal update: Trying to insert unknown diagonal operator type"
@@ -358,7 +450,7 @@ endif !identity encountered
       optype = opstring(ip)%optype
            
       config%n_exp = config%n_exp - 1
-      ! update P_add and  P_remove
+      ! update P_add and  P_remove because n_exp has changed 
       P_remove = float(( config%LL - config%n_exp + 1)) &
         / ( float(config%LL- config%n_exp + 1) + beta*probtable%sum_all_diagmatrix_elements )
       P_add = beta*probtable%sum_all_diagmatrix_elements &
@@ -385,9 +477,17 @@ endif !identity encountered
     endif
   endif
 
+  ! Off-diagonal operators are not exchanged in the diagonal update.
   ! Propagate spins as spin-flip operators are encountered.
   if ((i1.ne.0).and.(i2.eq.0)) then
     spins2(i1) = -spins2(i1)
+    call update_probtables(S=S, probtable=probtable, spins=spins2, &
+        C_par_hyperparam=C_par_hyperparam, hz_fields=hz_fields)
+    ! `sum_all_diagmatrix_elements` has changed => update 
+    P_remove = float(( config%LL - config%n_exp + 1)) &
+        / ( float(config%LL- config%n_exp + 1) + beta*probtable%sum_all_diagmatrix_elements )
+    P_add = beta*probtable%sum_all_diagmatrix_elements &
+        / ( float(config%LL-config%n_exp) + beta*probtable%sum_all_diagmatrix_elements )       
   endif
 
 enddo !do ip=1,LL
@@ -398,6 +498,10 @@ enddo !do ip=1,LL
     config%n_ghostlegs = MAX_GHOSTLEGS*config%LL
 
 deallocate(spins2)
+
+#ifdef DEBUG_CLUSTER_UPDATE
+  print*, "Diagonal update completed"
+#endif 
 
 END SUBROUTINE diagonal_update_plaquette 
 
@@ -465,12 +569,12 @@ END FUNCTION binary_search
 
 subroutine init_probtables( S, J_interaction_matrix, hx, &
   probtable, J_1, n_plaquettes, TRANSLAT_INV, &
-  hz_fields, C_par_hyperparam )
+  hz_fields, C_par_hyperparam, spins )
 ! Purpose:
 ! --------
 !    Precompute cumulative probability tables needed for sampling 
 !    SSE operators during the diagonal update.
-
+!
 ! Input:
 ! ------
 !    S: lattice structure object
@@ -484,6 +588,12 @@ subroutine init_probtables( S, J_interaction_matrix, hx, &
 !       invariant. In this case the interaction matrix can be 
 !       replaced by a vector for a Bravais lattice (or by a matrix 
 !        of shape (S%Nbasis, S%Nsites) for a lattice with a unit cell).
+!
+! Note: Longitudinal field operators (of strength hz_fields(:)) have, depending on the spin configuration,
+!       two different nonzero matrix elements. Therefore the probability of inserting an hz operator 
+!       at a given propagation step depends on the instantaneous spin configuration and the 
+!       corresponding part of the probability table needs to be recomputed after each propagation 
+!       step with a spin-flip operator (which changes the spin configuration).
 !
 ! Output:
 ! -------
@@ -506,6 +616,7 @@ integer,intent(in)             :: n_plaquettes
 logical, intent(in)            :: TRANSLAT_INV
 real(dp), intent(in)           :: hz_fields(:)
 real(dp), intent(in)           :: C_par_hyperparam
+integer, intent(in)            :: spins(:)  ! instantaneous spin configuration at a given propagation step (needed for hz_fiels(:)!=0)
 
 ! ... Local variables ...
 ! array of the matrix elements of the bond operators, i.e. h for i=j and 2|J_ij| else
@@ -556,6 +667,21 @@ enddo
 ! (1) 2-leg CONSTANT or 4-leg ISING operators 
 ! (2) 6-leg TRIANGULAR_PLAQUETTE operators 
 ! (3) 2-leg LONGITUDINAL (i.e. `hz`) operators
+probtable%n_opclass = n_opclass
+allocate(probtable%prob_opclass(1:n_opclass))
+probtable%prob_opclass(:) = 0.0_dp
+allocate(probtable%sum_all_diagmatrix_elements_peropclass(1:n_opclass))
+probtable%sum_all_diagmatrix_elements_peropclass(:) = 0.0_dp
+allocate(probtable%consts_added_per_opclass(1:n_opclass))
+probtable%consts_added_per_opclass(:) = 0.0_dp
+allocate(probtable%idx_opclass(1:n_opclass))
+probtable%idx_opclass(1) = TWOLEGCONST_OR_FOURLEG
+probtable%idx_opclass(2) = TRIANGULAR_PLAQUETTE
+probtable%idx_opclass(3) = LONGITUDINAL 
+allocate(probtable%cumprob_opclass(1:n_opclass))
+probtable%cumprob_opclass(:) = 0.0_dp
+allocate(probtable%hz_insert_aligned(1:S%Nsites))
+probtable%hz_insert_aligned(:) = 0.0_dp
 
 ! 1. The constants which have been added to the Hamiltonian artificially have to be
 ! subtracted from the energy in the end.
@@ -572,8 +698,8 @@ do jr=1, ir-1 ! avoid double counting and count only ir.ne.jr
   ss = ss + TWO*M_ij(ir,jr)  ! TWO*abs(J_interaction_matrix(ir,jr))
 enddo
 enddo
-sum_all_diagmatrix_elements_peropclass(1) = ss 
-consts_added_per_opclass(1) = cc
+probtable%sum_all_diagmatrix_elements_peropclass(1) = ss 
+probtable%consts_added_per_opclass(1) = cc
 
 ! (2) TRIANGULAR PLAQUETTE operators
 ! ----------------------------------
@@ -582,59 +708,41 @@ consts_added_per_opclass(1) = cc
 ! (of the Hamiltonian shifted by the constants)
 if (trim(S%lattice_type) == "triangular") then 
     ! Triangular lattice 
-    consts_added_per_opclass(2) = (3.0_dp/2.0_dp) * abs(J_1) * n_plaquettes
-    sum_all_diagmatrix_elements_peropclass(2) = 2.0_dp * abs(J_1) * n_plaquettes
+    probtable%consts_added_per_opclass(2) = (3.0_dp/2.0_dp) * abs(J_1) * n_plaquettes
+    probtable%sum_all_diagmatrix_elements_peropclass(2) = 2.0_dp * abs(J_1) * n_plaquettes
 elseif (trim(S%lattice_type) == "kagome") then 
     ! Kagome lattice 
-    consts_added_per_opclass(2) = 3.0_dp * abs(J_1) * n_plaquettes
-    sum_all_diagmatrix_elements_peropclass(2) = 4.0_dp * abs(J_1) * n_plaquettes
+    probtable%consts_added_per_opclass(2) = 3.0_dp * abs(J_1) * n_plaquettes
+    probtable%sum_all_diagmatrix_elements_peropclass(2) = 4.0_dp * abs(J_1) * n_plaquettes
 else
     stop "init_probtables(): Unknown lattice type."
 endif 
  
-! (3) LONGITUDINAL field operators 
-! --------------------------------
-cc = 0
-ss = 0
-do ir = 1, n
-  cc = cc + abs(hz_fields(ir)) + C_par_hyperparam
-  ! `hz` vertex on an up-spin and `hz` vertex on a down-spin are regarded as 
-  ! two different types of vertices. One has the matrix element `C_par_hyperparam`
-  ! and the other has the matrix element 2*abs(hz_fields(i)) + `C_par_hyperparam`. 
-  ! This is why `C_par_hyperparam` appears twice in the sum of all matrix elements. 
-  ss = ss + 2*abs(hz_fields(ir)) + 2*C_par_hyperparam
-enddo
-sum_all_diagmatrix_elements_peropclass(3) = ss 
-consts_added_per_opclass(3) = cc
+! (3) LONGITUDINAL field operators:
+! ---------------------------------
+ss = 0.0_dp
+do ir = 1, S%Nsites 
+  if ( abs(hz_fields(ir))>0 ) then 
+    ss = ss + C_par_hyperparam + abs(hz_fields(ir))
+  endif
+enddo 
+probtable%consts_added_per_opclass(3) = ss
 
+! after the consts for all operator classes have been initialized: 
+probtable%consts_added = sum(probtable%consts_added_per_opclass(:))
 
-! Probability for inserting an operator from one of the
-! `n_opclass` classes. 
-prob_opclass(:) = sum_all_diagmatrix_elements_peropclass(:) / sum(sum_all_diagmatrix_elements_peropclass(:))
-call assert( all(prob_opclass >= 0.0_dp), "neg. probs. in prob_opclass" )
-
-! Cumulative probabilities for sampling
-allocate(probtable%cumprob_opclass(1:n_opclass))
-do k = 1, n_opclass
-    probtable%cumprob_opclass(k) = sum(prob_opclass(1:k))
-enddo
-
-allocate(probtable%idx_opclass(1:n_opclass))
-probtable%idx_opclass(1) = TWOLEGCONST_OR_FOURLEG
-probtable%idx_opclass(2) = TRIANGULAR_PLAQUETTE
-probtable%idx_opclass(3) = LONGITUDINAL 
-
-probtable%sum_all_diagmatrix_elements = sum(sum_all_diagmatrix_elements_peropclass(:))
-probtable%consts_added = sum(consts_added_per_opclass(:))
-probtable%n_opclass = n_opclass
-
-! Probabilitiy for inserting an hz operator on an aligned spin state,
+! Heat-bath probability for inserting an hz operator on an aligned spin state
 ! (having already decided to insert and hz operator either on an aligned or 
 ! on an anti-aligned spin state).
 ! Conversely: probtable%hz_insert_antialigned = 1.0 - probtable%hz_insert_aligned
-allocate(probtable%hz_insert_aligned(1:S%Nsites))
 probtable%hz_insert_aligned(:) = (2*abs(hz_fields(:)) + C_par_hyperparam) / (2*abs(hz_fields(:)) + 2*C_par_hyperparam)
 
+! Here, the insertion probability depends on the 
+! instantaneous spin configuration. 
+! `update_probtables()` needs to be called whenever the 
+! instantaneous spin configuration has changed.
+call update_probtables(S=S, probtable=probtable, hz_fields=hz_fields, &
+    C_par_hyperparam=C_par_hyperparam, spins=spins)
 
 ! Calculate the cumulative probability tables used in the diagonal update
 ! for the insertion of diagonal 2leg CONSTANT and 4leg ISING vertices. 
@@ -715,6 +823,56 @@ else
 endif
 
 end subroutine     
+
+subroutine update_probtables(S, probtable, hz_fields, C_par_hyperparam, spins)
+  use lattice
+  ! Purpose:
+  ! --------
+  ! Update those parts of the probability tables which depend on the instantaneous spin configuration.
+  ! 
+  ! When the matrix element of a diagonal operator thus the insertion probability depends
+  ! on the instantaneous spin configuration, the corresponding part of the probability 
+  ! table needs to be recomputed at each propagation step with a spin-flip operator.   
+  implicit none 
+  type(Struct), intent(in)         :: S
+  type(t_ProbTable), intent(inout) :: probtable 
+  real(dp)                         :: hz_fields(:)
+  real(dp)                         :: C_par_hyperparam     
+  integer, intent(in)              :: spins(:)
+  
+  ! ... Local variables ...
+  real(dp) :: ss 
+  integer :: ir, k
+
+  ss = 0.0_dp
+  do ir = 1, S%Nsites
+    if (hz_fields(ir) /= 0.0_dp) then 
+      ! The hz operators have two different matrix elements depending on the spin
+      ! configuration. Add only the diagonal elements of the hz operator for the given 
+      ! instantaneous spin configuration.
+      ! Only add constants for non-zero fields. 
+      if (spins(ir) * hz_fields(ir) < 0.0_dp) then ! anti-aligned with the field 
+        ss = ss + C_par_hyperparam
+      else if (spins(ir) * hz_fields(ir) > 0.0_dp) then ! aligned with the field
+        ss = ss + 2*abs(hz_fields(ir)) + C_par_hyperparam
+      endif
+    endif 
+  enddo
+  probtable%sum_all_diagmatrix_elements_peropclass(3) = ss 
+  probtable%sum_all_diagmatrix_elements = sum(probtable%sum_all_diagmatrix_elements_peropclass(:))
+    
+    ! Probability for inserting an operator from one of the
+    ! `n_opclass` classes. 
+    probtable%prob_opclass(:) = probtable%sum_all_diagmatrix_elements_peropclass(:) &
+        / probtable%sum_all_diagmatrix_elements
+    ! call assert( all(probtable%prob_opclass >= 0.0_dp), "neg. probs. in prob_opclass" )
+     
+    ! Cumulative probabilities for sampling
+    do k = 1, probtable%n_opclass
+        probtable%cumprob_opclass(k) = sum(probtable%prob_opclass(1:k))
+    enddo
+
+end subroutine 
 
 subroutine extend_cutoff(opstring, config)
 ! Purpose:

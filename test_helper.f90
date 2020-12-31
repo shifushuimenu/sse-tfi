@@ -5,12 +5,14 @@ module test_helper
 
     function operator_type_helper(i1, i2, i3) result(optype)
         integer, intent(in) :: i1, i2, i3
-        character(len=9) :: optype
+        character(len=12) :: optype
 
         if((i1==0).and.(i2==0)) then 
             optype = "identity " ! Identity operator 
         elseif(i1==i2) then 
             optype = "constant " ! constant operator at site i1
+        elseif((i1>0).and.(i2==-i1)) then 
+            optype = "longitudinal"
         elseif((i1>0).and.(i2==0)) then 
             optype = "spinflip " ! spin-flip operator at site i1 
         elseif((i1 /= i2).and.(i1 > 0).and.(i2 > 0)) then 
@@ -48,7 +50,7 @@ module test_helper
                 i1 = opstring(ip)%i 
                 i2 = opstring(ip)%j
                 i3 = opstring(ip)%k
-                write(60, '(a9, 1x, l3, l3, i12, 3i12)') &
+                write(60, '(a12, 1x, l3, l3, i12, 3i12)') &
                     operator_type_helper(i1,i2,i3), .true., visited_ip(ip), ip, i1, i2, i3
 
                 if((i1>0).and.(i2==0)) then 

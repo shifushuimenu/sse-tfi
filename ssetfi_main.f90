@@ -10,7 +10,7 @@ module ssetfi_main
     private 
 
     public one_MCS_plaquette
-    public init_SSEconfig_hostart
+    public init_SSEconfig_hotstart
 
     contains
 
@@ -35,7 +35,7 @@ subroutine one_MCS_plaquette(S, beta, Jij_sign, hz_fields_sign, TRANSLAT_INVAR, 
     integer, allocatable, intent(inout) :: spins(:)
     type(t_BondOperator), allocatable, intent(inout) :: opstring(:)    
     type(t_Config), intent(inout) :: config
-    type(t_ProbTable), intent(in) :: probtable      
+    type(t_ProbTable), intent(inout) :: probtable      
     type(t_Plaquette), allocatable, intent(in) :: plaquettes(:)
     integer, allocatable, intent(inout) :: vertexlink(:)
     logical, allocatable, intent(inout) :: leg_visited(:)  
@@ -47,10 +47,10 @@ subroutine one_MCS_plaquette(S, beta, Jij_sign, hz_fields_sign, TRANSLAT_INVAR, 
     ! IMPROVE: no obscure number codes 
     do ut = 111, 113, 1
         ! loop over A-update (=111), B-update (=112) and C-update (=113)
-        call diagonal_update_plaquette(S=S, beta=beta, &
+        call diagonal_update_plaquette( S=S, beta=beta, &
             Jij_sign=Jij_sign, hz_fields_sign=hz_fields_sign, spins=spins, opstring=opstring, &
             config=config, probtable=probtable, plaquettes=plaquettes,&
-            update_type=ut, TRANSLAT_INVAR=translat_invar)
+            update_type=ut, TRANSLAT_INVAR=translat_invar, hz_fields=hz_fields, C_par_hyperparam=C_par_hyperparam )
         call build_linkedlist_plaquette( &
             opstring=opstring, config=config, &
             vertexlink=vertexlink, leg_visited=leg_visited )        
@@ -63,7 +63,7 @@ subroutine one_MCS_plaquette(S, beta, Jij_sign, hz_fields_sign, TRANSLAT_INVAR, 
 end subroutine 
 
 
-subroutine init_SSEconfig_hostart( S, LL, config, &
+subroutine init_SSEconfig_hotstart( S, LL, config, &
     opstring, spins, vertexlink, leg_visited )
     ! ***********************************************************
     ! Initialize the operator string with identities.
@@ -395,10 +395,12 @@ program ssetfi
     endif
 
     allocate(hz_fields_sign(1:size(hz_fields)))
-    where( hz_fields >= 0 ) 
+    where( hz_fields > 0 ) 
         hz_fields_sign = +1
-    elsewhere
+    elsewhere( hz_fields < 0 )
         hz_fields_sign = -1
+    elsewhere
+        hz_fields_sign = 0
     endwhere
 
     ! seed random number generator:
@@ -406,17 +408,17 @@ program ssetfi
     !  - with the system time (at the millisecond level)
     call init_RNG(MPI_rank, DETERMINISTIC=deterministic) 
 
+    call init_SSEconfig_hotstart( S=S, LL=10, config=config, &
+        opstring=opstring, spins=spins, vertexlink=vertexlink, leg_visited=leg_visited )
+
     ! Precompute the probability tables from which diagonal operators 
     ! will be sampled. 
-    call init_probtables( S=S, J_interaction_matrix=J_interaction_matrix, &
+        call init_probtables( S=S, J_interaction_matrix=J_interaction_matrix, &
         hx=hx, probtable=probtable, J_1=J_1, &
         n_plaquettes=size(plaquettes,dim=1), TRANSLAT_INV=translat_invar, &
-        hz_fields=hz_fields, C_par_hyperparam=C_par_hyperparam)
+        hz_fields=hz_fields, C_par_hyperparam=C_par_hyperparam, spins=spins)
     ! J_interaction_matrix is not needed anymore.
     if( allocated(J_interaction_matrix) ) deallocate( J_interaction_matrix )
-
-    call init_SSEconfig_hostart( S=S, LL=10, config=config, &
-        opstring=opstring, spins=spins, vertexlink=vertexlink, leg_visited=leg_visited )
 
     do iit = 1, ntherm_step    
         call one_MCS_plaquette( S=S, beta=beta, Jij_sign=Jij_sign, hz_fields_sign=hz_fields_sign, &
@@ -444,7 +446,7 @@ program ssetfi
         call Phys_Measure(P0, S, Kgrid, MatsuGrid, config, spins, opstring, &
             beta, probtable%consts_added, heavy_use=heavy_use)
 
-        if (mod(iim, nmeas_step / Nbin) == 0) then 
+        if ( mod(iim, nmeas_step / Nbin) == 0 ) then 
             call Phys_Avg(P0)
         endif 
     enddo

@@ -403,7 +403,6 @@ module measurements
         P0%meas(:, idx) = P0%meas(:, idx) + P0%meas(:, tmp_idx)
         P0%meas(:, P0%ac_time) = P0%meas(:, P0%ac_time) + P0%meas(:, tmp_idx)**2
 
-
         open(100, file='TS.dat', position='append', status='unknown')
         write(100, *) energy, magnz, magnz2, spins2binrep(spins), COparam, config%n2leg_hz, &
             config%n2leg, config%n4leg, config%n_exp
