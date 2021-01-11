@@ -30,7 +30,7 @@ type t_ProbTable
   integer :: n_opclass                           ! number of classes of diagonal operators to be chosen from in the diagonal update
   real(dp), allocatable :: cumprob_opclass(:)    ! cumulative sum of the probabilities to insert an operator from a certain class
   integer, allocatable  :: idx_opclass(:)      ! integer indices for operator classes (used in the diagonal update)
-  real(dp), allocatable :: hz_insert_aligned(:)  ! ( 2*abs(hz(i)) + C_par ) / ( 2*abs(hz(i)) + 2*C_par )
+  real(dp), allocatable :: hz_matrix_element(:)  ! ( 2*abs(hz(i)) + C_par ) / ( 2*abs(hz(i)) + 2*C_par )
 
   ! needed for updating the probability tables 
   ! whenever the instantaneous spin configuration changes 
@@ -72,6 +72,7 @@ SUBROUTINE diagonal_update_plaquette( S, beta, Jij_sign, hz_fields_sign, &
 
 use SSE_configuration
 use lattice
+use util, only: assert
 
 ! use probtables 
 implicit none
@@ -356,15 +357,13 @@ if( (i1 == 0).and.(i2 == 0) ) then
     norm = 0
     cumprob_hz(:) = 0.0_dp
     do ir = 1, S%Nsites 
-      if (spins(ir) == hz_fields_sign(ir)) then
-         norm = norm + probtable%hz_insert_aligned(ir)
-      else 
-         norm = norm + 1.0_dp - probtable%hz_insert_aligned(ir)
-      endif 
-      cumprob_hz(ir) = norm 
+         norm = norm + probtable%hz_matrix_element(ir)
+         cumprob_hz(ir) = norm 
     enddo 
     cumprob_hz(:) = cumprob_hz(:) / norm
 
+    call assert(all(cumprob_hz>=0), 'all(cumprob_hz>0) failed')
+    
     call random_number(eta)
     i1 = binary_search(cumprob_hz, eta)
       
@@ -376,7 +375,7 @@ if( (i1 == 0).and.(i2 == 0) ) then
 
     opstring(ip)%optype = LONGITUDINAL 
     opstring(ip)%i = i1
-    opstring(ip)%j = -i1         ! Actually, not necessary to set this entry.
+    opstring(ip)%j = -i1         ! Actually, not necessary to set this entry, it is not used. 
     opstring(ip)%k = alignment   ! The spin state is needed in the cluster update to accumulate the exchange fields.
 
     config%n_exp = config%n_exp + 1; config%n2leg_hz = config%n2leg_hz + 1 
@@ -680,8 +679,8 @@ probtable%idx_opclass(2) = TRIANGULAR_PLAQUETTE
 probtable%idx_opclass(3) = LONGITUDINAL 
 allocate(probtable%cumprob_opclass(1:n_opclass))
 probtable%cumprob_opclass(:) = 0.0_dp
-allocate(probtable%hz_insert_aligned(1:S%Nsites))
-probtable%hz_insert_aligned(:) = 0.0_dp
+allocate(probtable%hz_matrix_element(1:S%Nsites))
+probtable%hz_matrix_element(:) = 0.0_dp
 
 ! 1. The constants which have been added to the Hamiltonian artificially have to be
 ! subtracted from the energy in the end.
@@ -731,13 +730,7 @@ probtable%consts_added_per_opclass(3) = ss
 ! after the consts for all operator classes have been initialized: 
 probtable%consts_added = sum(probtable%consts_added_per_opclass(:))
 
-! Heat-bath probability for inserting an hz operator on an aligned spin state
-! (having already decided to insert and hz operator either on an aligned or 
-! on an anti-aligned spin state).
-! Conversely: probtable%hz_insert_antialigned = 1.0 - probtable%hz_insert_aligned
-probtable%hz_insert_aligned(:) = (2*abs(hz_fields(:)) + C_par_hyperparam) / (2*abs(hz_fields(:)) + 2*C_par_hyperparam)
-
-! Here, the insertion probability depends on the 
+! For hz (longitudinal field) operators, the insertion probability depends on the 
 ! instantaneous spin configuration. 
 ! `update_probtables()` needs to be called whenever the 
 ! instantaneous spin configuration has changed.
@@ -846,15 +839,17 @@ subroutine update_probtables(S, probtable, hz_fields, C_par_hyperparam, spins)
 
   ss = 0.0_dp
   do ir = 1, S%Nsites
-    if (hz_fields(ir) /= 0.0_dp) then 
+    if (abs(hz_fields(ir)) > 0.0_dp) then 
       ! The hz operators have two different matrix elements depending on the spin
       ! configuration. Add only the diagonal elements of the hz operator for the given 
       ! instantaneous spin configuration.
       ! Only add constants for non-zero fields. 
       if (spins(ir) * hz_fields(ir) < 0.0_dp) then ! anti-aligned with the field 
         ss = ss + C_par_hyperparam
+        probtable%hz_matrix_element(ir) = C_par_hyperparam
       else if (spins(ir) * hz_fields(ir) > 0.0_dp) then ! aligned with the field
         ss = ss + 2*abs(hz_fields(ir)) + C_par_hyperparam
+        probtable%hz_matrix_element(ir) = 2*abs(hz_fields(ir)) + C_par_hyperparam
       endif
     endif 
   enddo
@@ -871,7 +866,7 @@ subroutine update_probtables(S, probtable, hz_fields, C_par_hyperparam, spins)
     do k = 1, probtable%n_opclass
         probtable%cumprob_opclass(k) = sum(probtable%prob_opclass(1:k))
     enddo
-
+  
 end subroutine 
 
 subroutine extend_cutoff(opstring, config)

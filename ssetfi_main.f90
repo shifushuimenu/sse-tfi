@@ -206,7 +206,7 @@ program ssetfi
         print*, "You set `J_1=0` and `ignore_Jmatrix=.true.`. This means that the interactions"
         print*, "are all set to zero, which is probably not what you want."
         print*, "Exiting ..."
-        stop
+        ! stop
     endif 
     call assert( C_par_hyperparam >=0.0_dp )
 

@@ -621,7 +621,7 @@ operator_types: select case( opstring(ip)%optype )
                     * C_par_hyperparam / (TWO * abs(hz_fields(i1)) + C_par_hyperparam)
             else 
                 ! spin not aligned or zero longitudinal field 
-                if (C_par_hyperparam > 0) then 
+                if( C_par_hyperparam > 0 ) then 
                     wratio_exchange_field = wratio_exchange_field &
                         * (TWO * abs(hz_fields(i1)) + C_par_hyperparam) / C_par_hyperparam
                 else
