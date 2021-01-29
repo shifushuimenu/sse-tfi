@@ -64,7 +64,9 @@ integer :: i, l, site, ip, ip_site, ip_site_next, ir, i1,i2
 integer :: op1, op2, op1_new, op2_new
 integer :: k1, k2, l1, l2
 integer :: n_exp_new
+integer :: ix, i3
 
+integer :: sites(1:3) ! a plaquette has three sites, a bond operator only two sites  
 
 allocate(opstring_site(config%n_sites,5*config%LL))
 opstring_site(:,:) = NOT_USED ! initialize to invalid values 
@@ -108,29 +110,34 @@ do ip = 1, config%LL
         ipsite(n_tot)%ir = i1
     ! Ising operator encountered
       case(ISING_BOND)
-        touched(i1) = .TRUE.
-        touched(i2) = .TRUE.
-        if (.not.ISING_LAST(i1)) then
-    ! Insert an "Ising delimiter" in the opstring of site i1
-          counter(i1) = counter(i1) + 1
-          opstring_site(i1, counter(i1)) = DELIMITER
-          ISING_LAST(i1) = .TRUE.
-          n_tot = n_tot + 1
-          ipsite(n_tot)%ip = ip
-          ipsite(n_tot)%ir = i1	! The position of Ising delimiters is needed because it also appears in opstring_site(:,:). ?????				
-        endif
-        if (.not.ISING_LAST(i2)) then
-    ! Insert an "Ising delimiter" in the opstring of site i2
-          counter(i2) = counter(i2) + 1
-          opstring_site(i2, counter(i2)) = DELIMITER
-          ISING_LAST(i2) = .TRUE.
-          n_tot = n_tot + 1
-          ipsite(n_tot)%ip = ip
-          ipsite(n_tot)%ir = i2
-        endif
-    ! redundant
-        ISING_LAST(i1) = .TRUE.
-        ISING_LAST(i2) = .TRUE.
+        sites(1:2) = (/i1, i2/)
+        do ix = 1,2
+          touched(sites(ix)) = .TRUE.
+          if (.not.ISING_LAST(sites(ix))) then 
+              counter(ix) = counter(ix) + 1
+              opstring_site(ix, counter(ix)) = DELIMITER
+              ISING_LAST(ix) = .TRUE.
+              n_tot = n_tot + 1
+              ipsite(n_tot)%ip = ip
+              ipsite(n_tot)%ir = ix
+          endif 
+        enddo 
+      
+      case(TRIANGULAR_PLAQUETTE)
+        i3 = opstring(ip)%k
+        sites(1:3) = (/i1, i2, i3/)
+        do ix = 1,3
+          touched(sites(ix)) = .TRUE.
+          if (.not.ISING_LAST(sites(ix))) then 
+              counter(ix) = counter(ix) + 1
+              opstring_site(ix, counter(ix)) = DELIMITER
+              ISING_LAST(ix) = .TRUE.
+              n_tot = n_tot + 1
+              ipsite(n_tot)%ip = ip
+              ipsite(n_tot)%ir = ix
+          endif 
+        enddo 
+      
       case default
     !     print*, "jumping over identities"
     ! remove
@@ -281,14 +288,6 @@ do l =1,n_tot
     counter(ir) = counter(ir) + 1
 enddo
 
-!remove
-! print*, "------- Operator string after off-diagonal update--------"
-! do ip=1,LL
-!   i1 = opstring(ip)%i
-!   i2 = opstring(ip)%j
-!   print*, "ip=", ip, i1, i2
-! enddo
-!remove
 
 ! The off-diagonal update does not change the expansion order (=energy).
 ! It only changes the magnetization through the exchange of constants and spin flip operators,
