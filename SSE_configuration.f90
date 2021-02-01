@@ -59,7 +59,8 @@ module SSE_configuration
         integer :: Asite
         integer :: Bsite
         integer :: Csite
-    end type t_Plaquette    
-
+    end type t_Plaquette   
+    
+     
 end module 
   

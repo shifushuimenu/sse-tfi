@@ -16,6 +16,7 @@ ssetfi_objects =  class_Stack.o \
 	      ssetfi_globals.o \
 		  test_helper.o \
 		  quantum_cluster_update_plaquette.o \
+		  local_offdiagonal_update.o \
 		  quicksort.o tau_embedding.o \
 		  measurements.o \
 	  

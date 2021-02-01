@@ -2,7 +2,7 @@ module local_update
 
  contains
 
-subroutine local_offdiagonal_update(opstring, spins, config)
+subroutine local_offdiagonal_update(spins, opstring, config)
 
 use SSE_configuration
 use util, only: assert 
@@ -11,11 +11,11 @@ implicit none
     
 ! Arguments:
 ! ==========
-type(t_BondOperator), intent(inout)  :: opstring(:) 
 integer, intent(inout)               :: spins(:)
+type(t_BondOperator), intent(inout)  :: opstring(:) 
 type(t_Config), intent(in)           :: config
 
-! ... Local defitions and variables ...
+! ... Local definitions and variables ...
 
 ! ipsite associates for each 2-leg vertex its position ip in the operator string
 ! with the linearly stored site ir on which it acts. Ising delimiters are defined
@@ -33,7 +33,7 @@ integer, allocatable  :: opstring_site(:, :)
 ! separated by one or several Ising operators (which are represented 
 ! by a single "Ising delimiter").
 ! The notation for the elements of opstring_site(ir,:) is
-!	-1: Ising delimiter
+!	-1: Ising delimiter (Ising bond or triangular plaquette)
 !	 1: constant operator
 !	 2: spin-flip operator
 ! NOTE: The arrays opstring_site(ir,:) have by default length LL. Most of the entries are not used and therefore
@@ -60,13 +60,17 @@ logical :: WRAPPING ! WRAPPING=.TRUE. means that two operators that are to be re
 		    ! are connected through imaginary time
 
 integer :: n_tot, n_test ! = n_2leg + n_Ising_delimiter (not equal to n_exp !)
-integer :: i, l, site, ip, ip_site, ip_site_next, ir, i1,i2
+integer :: i, ii, l, site, ip, ip_site, ip_site_next, ir, i1,i2
 integer :: op1, op2, op1_new, op2_new
 integer :: k1, k2, l1, l2
 integer :: n_exp_new
 integer :: ix, i3
 
 integer :: sites(1:3) ! a plaquette has three sites, a bond operator only two sites  
+
+if( config%n2leg < 2 ) then 
+    return 
+endif 
 
 allocate(opstring_site(config%n_sites,5*config%LL))
 opstring_site(:,:) = NOT_USED ! initialize to invalid values 
@@ -110,13 +114,14 @@ do ip = 1, config%LL
         ipsite(n_tot)%ir = i1
     ! Ising operator encountered
       case(ISING_BOND)
+        print*, "i1, i2=", i1, i2, optype
         sites(1:2) = (/i1, i2/)
         do ix = 1,2
           touched(sites(ix)) = .TRUE.
           if (.not.ISING_LAST(sites(ix))) then 
-              counter(ix) = counter(ix) + 1
-              opstring_site(ix, counter(ix)) = DELIMITER
-              ISING_LAST(ix) = .TRUE.
+              counter(sites(ix)) = counter(sites(ix)) + 1
+              opstring_site(sites(ix), counter(sites(ix))) = DELIMITER
+              ISING_LAST(sites(ix)) = .TRUE.
               n_tot = n_tot + 1
               ipsite(n_tot)%ip = ip
               ipsite(n_tot)%ir = ix
@@ -125,13 +130,13 @@ do ip = 1, config%LL
       
       case(TRIANGULAR_PLAQUETTE)
         i3 = opstring(ip)%k
-        sites(1:3) = (/i1, i2, i3/)
+        sites(1:3) = (/abs(i1), abs(i2), abs(i3)/)
         do ix = 1,3
           touched(sites(ix)) = .TRUE.
           if (.not.ISING_LAST(sites(ix))) then 
-              counter(ix) = counter(ix) + 1
-              opstring_site(ix, counter(ix)) = DELIMITER
-              ISING_LAST(ix) = .TRUE.
+              counter(sites(ix)) = counter(sites(ix)) + 1
+              opstring_site(sites(ix), counter(sites(ix))) = DELIMITER
+              ISING_LAST(sites(ix)) = .TRUE.
               n_tot = n_tot + 1
               ipsite(n_tot)%ip = ip
               ipsite(n_tot)%ir = ix
@@ -161,7 +166,6 @@ do ir=1, config%n_sites
   do i=1, n_opstring_site(ir) ! divide number of update steps by two, since in each step potentially two operators are affected !!!!!! REMOVE
 ! Attempt off-diagonal update for a number of propagation steps proportional to the 
 ! length of the operator substring    
-! ... only if n_opstring_site(ir) > 1
     if (n_opstring_site(ir) > 1) then
 
     WRAPPING = .FALSE.
@@ -203,6 +207,10 @@ do ir=1, config%n_sites
         if ( .not.(ip_site == n_opstring_site(ir))) then 
 	  print*, "Error: Two strange operators in a row opstring_site(ir,:) ", "ir =", ir
 	  print*, "ir=", ir, " ip_site=", ip_site, " op(ip_site)=", op1, " op(ip_site+1)=", op2
+	  print*, "Here is the operator substring on site ir=", ir
+          do ii=1, n_opstring_site(ir)
+              print*, ii, opstring_site(ir, ii)
+          enddo 
 	  stop
         endif
 ! Do nothing, i.e. keep the adjacent Ising delimiters 
