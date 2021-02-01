@@ -58,15 +58,15 @@
 !   rank (for production runs). 
 ! ========================================================
 &SIMPARAMS
-J_1 		= 0    ! +1.0
+J_1 		= 0.0    ! +1.0
 hx  		= 1.0  ! hx > 0 required
 temp 		= 0.1
 nx   		= 3
 ny   		= 3
-n_sites 	= 27
-lattice_type = "kagome"
+n_sites 	= 9
+lattice_type = "triangular"
 ignore_Jmatrix = F
-Jmatrix_file = "J3x3_inplane.txt"  !"Jmatrix_nnFM.dat" !"Jmatrix_kagome2x2_FM.dat"  !"Jmatrix_nnFM.dat" 
+Jmatrix_file = "Jmatrix_nnFM.txt" !"Jmatrix_kagome2x2_FM.dat"  !"Jmatrix_nnFM.dat" "J3x3_inplane.txt" 
 translat_invar = T
 ntherm_step = 1000
 nmeas_step  = 10000

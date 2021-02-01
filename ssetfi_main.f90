@@ -52,7 +52,6 @@ subroutine one_MCS_plaquette(S, beta, Jij_sign, TRANSLAT_INVAR, spins, opstring,
         call quantum_cluster_update_plaquette( &
             spins=spins, opstring=opstring, vertexlink=vertexlink, &
             leg_visited=leg_visited, config=config )
-        call local_offdiagonal_update(spins, opstring, config)
     enddo
 
 end subroutine 
