@@ -1,3 +1,5 @@
+! IMPROVE: do not allocate arrays of length LL, find a more appropriate way since LL can be very large.
+
 module local_update
 
  contains
@@ -39,7 +41,7 @@ integer, allocatable  :: opstring_site(:, :)
 ! NOTE: The arrays opstring_site(ir,:) have by default length LL. Most of the entries are not used and therefore
 ! not initialized. Here it is assumed that they are initialized by default (i.e. when allocating) to a value
 ! different from -1, 1 or 2.
-integer :: DELIMITER,  CONST_OP, FLIP_OP, NOT_USED
+integer :: DELIMITER, CONST_OP, FLIP_OP, NOT_USED
 parameter (DELIMITER = -1)
 parameter (CONST_OP = 1)
 parameter (FLIP_OP = 2)
@@ -92,7 +94,7 @@ do ip = 1, config%LL
   i1 = opstring(ip)%i
   i2 = opstring(ip)%j
   optype = opstring(ip)%optype
-
+  
   select case(optype)
       case(CONSTANT)
         touched(i1) = .TRUE.
@@ -109,12 +111,9 @@ do ip = 1, config%LL
         opstring_site(i1, counter(i1)) = FLIP_OP
         ISING_LAST(i1) = .FALSE.
         n_tot = n_tot + 1
-    ! Improve: confusingly n_tot is used as a counter here
         ipsite(n_tot)%ip = ip
         ipsite(n_tot)%ir = i1
-    ! Ising operator encountered
       case(ISING_BOND)
-        print*, "i1, i2=", i1, i2, optype
         sites(1:2) = (/i1, i2/)
         do ix = 1,2
           touched(sites(ix)) = .TRUE.
@@ -124,7 +123,7 @@ do ip = 1, config%LL
               ISING_LAST(sites(ix)) = .TRUE.
               n_tot = n_tot + 1
               ipsite(n_tot)%ip = ip
-              ipsite(n_tot)%ir = ix
+              ipsite(n_tot)%ir = sites(ix)
           endif 
         enddo 
       
@@ -139,18 +138,16 @@ do ip = 1, config%LL
               ISING_LAST(sites(ix)) = .TRUE.
               n_tot = n_tot + 1
               ipsite(n_tot)%ip = ip
-              ipsite(n_tot)%ir = ix
+              ipsite(n_tot)%ir = sites(ix)
           endif 
         enddo 
       
       case default
     !     print*, "jumping over identities"
-    ! remove
         if ((i1.ne.0).or.(i2.ne.0)) then
           print*,"You probably forgot an if-case. i1=, i2= ", i1, i2
           stop
         endif
-    ! remove    
   end select 
 
 enddo
@@ -163,7 +160,7 @@ call assert( (n_test == n_tot), "n_tot /= n_test" )
 
 do ir=1, config%n_sites
 ! 2. Perform the local off-diagonal update for each operator substring
-  do i=1, n_opstring_site(ir) ! divide number of update steps by two, since in each step potentially two operators are affected !!!!!! REMOVE
+  do i=1, n_opstring_site(ir)/2 ! divide number of update steps by two, since in each step potentially two operators are affected !!!!!! REMOVE
 ! Attempt off-diagonal update for a number of propagation steps proportional to the 
 ! length of the operator substring    
     if (n_opstring_site(ir) > 1) then
@@ -211,6 +208,17 @@ do ir=1, config%n_sites
           do ii=1, n_opstring_site(ir)
               print*, ii, opstring_site(ir, ii)
           enddo 
+!           print*, "And here is the full operator string filtered to show only Ising operators"
+!           do ip = 1, config%LL
+!               if (opstring(ip)%optype == ISING_BOND) then 
+!                   i1 = opstring(ip)%i
+!                   i2 = opstring(ip)%j
+!                   print*, "i1, i2=", i1, i2
+!                   if ((i1 == 0) .or. (i2 == 0)) then 
+!                       stop 
+!                   endif 
+!               endif 
+!           enddo
 	  stop
         endif
 ! Do nothing, i.e. keep the adjacent Ising delimiters 
@@ -220,6 +228,7 @@ do ir=1, config%n_sites
       endif
 
    elseif (op1 /= op2) then
+   
 ! If the two operators are not the same and there is no Ising delimiter
 ! among them, permute the operators.
 ! If one of the operators is a delimiter, no update procedure can be performed.
@@ -247,8 +256,7 @@ do ir=1, config%n_sites
 	! Do nothing
 	op1_new = op1
 	op2_new = op2
-      endif
-
+      endif         
    endif
 
 ! re-assign the operators to the operator sequence at positions ip and ip+1 (at site ir)
@@ -278,11 +286,11 @@ enddo ! Local off-diagonal update for each site ir
  counter(1:config%n_sites) = 1
 
 ! n_tot is the total number of 2-leg operators (CONST_OP, FLIP_OP, DELIMITER) in all operator
-! substrings {opstring_site(ir,:)}. It does not correspond to the total number of operators 
+! substrings {opstring_site(ir,:), ir=1,n_sites}. It does not correspond to the total number of operators 
 ! in the original operator string since consecutive Ising operators acting on one site are not recorded
 ! in the operator substrings.
 
-do l =1,n_tot
+do l = 1, n_tot
     ip = ipsite(l)%ip
     ir = ipsite(l)%ir
     if (opstring_site(ir, counter(ir)) == CONST_OP) then ! constant operator
@@ -320,9 +328,7 @@ endif
 do ir=1,config%n_sites
   if (.not.touched(ir)) then
     call random_number(eta)
-    if (eta <= 0.5) then
-      spins(ir) = -spins(ir)
-    endif    
+    if (eta <= 0.5) spins(ir) = -spins(ir)
   endif
 enddo
 
