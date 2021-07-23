@@ -316,43 +316,6 @@ if( (i1 == 0).and.(i2 == 0) ) then
 #ifdef DEBUG_DIAGONAL_UPDATE
     print*, "insert longitudinal operator"
 #endif 
-     ! Choose between an aligned or antialigned 
-     ! `hz` vertex according to the strength and orientation of the field,
-     ! but independently of the spin alignment. 
-
-    !  call random_number(eta)
-    !  i1 = int(eta*S%Nsites) + 1
-    !   ! for homogeneous longitudinal fields
-    !   ! MISSING: sample positions for inhomogeneous fields
-    !   ! based on hz_fields(:)       
-    !  call random_number(eta)
-    !  if ( eta <= probtable%hz_insert_aligned(i1) ) then
-    !     alignment = +1
-    !  else
-    !     alignment = -1
-    !  endif 
-    !  !  if( spins2(i1) == hz_fields_sign(i1) ) then
-    !  !     prob_insert = probtable%hz_insert_aligned(i1)
-    !  !  else ! spin at the propagation step is not aligned with the longitudinal field 
-    !  !     prob_insert = 1.0_dp - probtable%hz_insert_aligned(i1)
-    !  !  endif      
-    !  if ( spins2(i1) == alignment * hz_fields_sign(i1) ) then 
-    !     print*, "insert"
-    !     opstring(ip)%optype = LONGITUDINAL 
-    !     opstring(ip)%i = i1
-    !     opstring(ip)%j = -i1          ! actually, not necessary to set this entry 
-    !     opstring(ip)%k = spins2(i1)   ! The spin state is needed in the cluster update to accumulate the exchange fields 
-
-    !     config%n_exp = config%n_exp + 1; config%n2leg_hz = config%n2leg_hz + 1 
-    !     ! update P_add  and  P_remove
-    !     P_remove = float(( config%LL - config%n_exp + 1)) &
-    !         / ( float(config%LL- config%n_exp + 1) + beta*probtable%sum_all_diagmatrix_elements )
-    !     P_add = beta*probtable%sum_all_diagmatrix_elements &
-    !         / ( float(config%LL-config%n_exp) + beta*probtable%sum_all_diagmatrix_elements )
-    !  else
-    !     print*, "don't insert"
-    !     ! Don't insert any operator. 
-    !  endif 
 
     norm = 0
     cumprob_hz(:) = 0.0_dp
@@ -366,7 +329,7 @@ if( (i1 == 0).and.(i2 == 0) ) then
     
     call random_number(eta)
     i1 = binary_search(cumprob_hz, eta)
-      
+
     if ( spins2(i1) == hz_fields_sign(i1) ) then           
         alignment = +1
     else 
@@ -379,49 +342,11 @@ if( (i1 == 0).and.(i2 == 0) ) then
     opstring(ip)%k = alignment   ! The spin state is needed in the cluster update to accumulate the exchange fields.
 
     config%n_exp = config%n_exp + 1; config%n2leg_hz = config%n2leg_hz + 1 
-    ! update P_add  and  P_remove because `sum_all_diagmatrix_elements` depends on the instantaneous spin
     P_remove = float(( config%LL - config%n_exp + 1)) &
         / ( float(config%LL- config%n_exp + 1) + beta*probtable%sum_all_diagmatrix_elements )
     P_add = beta*probtable%sum_all_diagmatrix_elements &
         / ( float(config%LL-config%n_exp) + beta*probtable%sum_all_diagmatrix_elements )
-
-    ! OP_INSERTED = .false.
-    ! counter = 0
-    ! do while (.not. OP_INSERTED)
-    !   counter = counter + 1 
-    !   print*, "counter=", counter 
-    !   call random_number(eta)
-    !   i1 = int(eta*S%Nsites) + 1
-    !     ! for homogeneous longitudinal fields
-    !     ! MISSING: sample positions for inhomogeneous fields
-    !     ! based on hz_fields(:)       
-    
-    !   if ( spins2(i1) == hz_fields_sign(i1) ) then           
-    !       alignment = +1
-    !       prob = probtable%hz_insert_aligned(i1)
-    !   else 
-    !       alignment = -1
-    !       prob = 1.0_dp - probtable%hz_insert_aligned(i1)
-    !   endif 
-
-    !   call random_number(eta)
-    !   if (eta < prob) then 
-    !       OP_INSERTED = .true.
-    !       opstring(ip)%optype = LONGITUDINAL 
-    !       opstring(ip)%i = i1
-    !       opstring(ip)%j = -i1         ! Actually, not necessary to set this entry.
-    !       opstring(ip)%k = alignment   ! The spin state is needed in the cluster update to accumulate the exchange fields.
-
-    !       config%n_exp = config%n_exp + 1; config%n2leg_hz = config%n2leg_hz + 1 
-    !       ! update P_add  and  P_remove
-    !       P_remove = float(( config%LL - config%n_exp + 1)) &
-    !           / ( float(config%LL- config%n_exp + 1) + beta*probtable%sum_all_diagmatrix_elements )
-    !       P_add = beta*probtable%sum_all_diagmatrix_elements &
-    !           / ( float(config%LL-config%n_exp) + beta*probtable%sum_all_diagmatrix_elements )
-    !   endif 
-    ! enddo
-
-
+ 
   case default
       print*, "Diagonal update: Trying to insert unknown diagonal operator type"
       print*, "optype = ", optype
@@ -841,7 +766,7 @@ subroutine update_probtables(S, probtable, hz_fields, C_par_hyperparam, spins)
   do ir = 1, S%Nsites
     if (abs(hz_fields(ir)) > 0.0_dp) then 
       ! The hz operators have two different matrix elements depending on the spin
-      ! configuration. Add only the diagonal elements of the hz operator for the given 
+      ! configuration. Add only the matrix elements of the hz operator for the given 
       ! instantaneous spin configuration.
       ! Only add constants for non-zero fields. 
       if (spins(ir) * hz_fields(ir) < 0.0_dp) then ! anti-aligned with the field 

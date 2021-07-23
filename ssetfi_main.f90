@@ -59,7 +59,8 @@ subroutine one_MCS_plaquette(S, beta, Jij_sign, hz_fields_sign, TRANSLAT_INVAR, 
             spins=spins, opstring=opstring, vertexlink=vertexlink, &
             leg_visited=leg_visited, config=config, &
             hz_fields=hz_fields, C_par_hyperparam=C_par_hyperparam )
-        call local_offdiagonal_update(spins=spins, opstring=opstring, config=config)
+! ! ! Local off-diagonal update is not working correctly.
+! ! !         call local_offdiagonal_update(spins=spins, opstring=opstring, config=config)
     enddo
 
 end subroutine 
@@ -378,7 +379,7 @@ program ssetfi
     endif 
 
     ! read the site-dependent longitudinal fields from file 
-    ! unless this fiel is to be ignored 
+    ! unless this field is to be ignored 
     allocate( hz_fields(1:S%Nsites) )
     if( ignore_hz_fields ) then 
         hz_fields(:) = hz

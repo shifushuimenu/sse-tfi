@@ -274,7 +274,6 @@ deterministic_cluster_construction: do while( LEGS_TO_BE_PROCESSED )
     ! with heat bath probability
     call random_number(prob)
     if( prob < wratio_exchange_field / (1.0_dp + wratio_exchange_field) ) then 
-    ! if( prob < wratio_exchange_field ) then 
         ! Accept the flipped clusters and 
         ! update the initial spin configuration.
 #ifdef DEBUG_CLUSTER_UPDATE
