@@ -326,7 +326,6 @@ module measurements
         integer :: spins_tmp(config%N_sites)
         integer :: l_nochange 
         real(dp) :: factor 
-
         ! temporary help variable => REMOVE later 
         complex(dp), allocatable  :: AzBzq_temp(:,:)
         if (.not.allocated(AzBzq_temp)) allocate( AzBzq_temp(MatsuGrid%N_Matsubara, Kgrid%Nq) ) 
@@ -353,6 +352,7 @@ module measurements
         magnz2 = 0.0_dp
         COparam = 0.0_dp
         do ip = 1, LL
+
             l_nochange = l_nochange + 1
             i1 = opstring(ip)%i
             i2 = opstring(ip)%j
@@ -362,8 +362,8 @@ module measurements
                 ! At propagation steps between spin-flip operators the spin configuration
                 ! does not change. Count for how many propagation steps the spin configuration 
                 ! stays constant (=l_nochange) and weight the spin config before the next 
-                ! spin flip operator by that number. 
-                magnz_tmp = sum(spins_tmp(:)) / float(Nsites)
+                ! spin flip operator by that fraction of LL.  
+                magnz_tmp = sum(spins_tmp(:)) / float(Nsites)                
                 magnz = magnz + magnz_tmp * l_nochange * factor 
                 magnz2 = magnz2 + magnz_tmp**2 * l_nochange * factor 
                 COparam_ = complex(0.0_dp, 0.0_dp)
@@ -379,6 +379,7 @@ module measurements
         enddo 
         ! Take care of the segment of propagation steps from the last spin 
         ! flip operator up to ip=LL.
+
         magnz_tmp = sum(spins_tmp(:)) / float(Nsites)
         magnz = magnz + magnz_tmp * l_nochange * factor 
         magnz2 = magnz2 + magnz_tmp**2 * l_nochange * factor 
@@ -391,7 +392,7 @@ module measurements
         COparam = COparam * 3.0_dp / float(Nsites)
 
         P0%meas(P0_ENERGY, tmp_idx) = energy
-        P0%meas(P0_MAGNETIZATION, tmp_idx) = magnz2
+        P0%meas(P0_MAGNETIZATION, tmp_idx) = magnz2 ! magnz
         P0%meas(P0_COPARAM, tmp_idx) = COparam
         P0%meas(P0_AV_NEXP, tmp_idx) = config%n_exp
         P0%meas(P0_AV_NEXP2, tmp_idx) = config%n_exp**2

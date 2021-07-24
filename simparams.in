@@ -71,26 +71,26 @@
 !   rank (for production runs). 
 ! ========================================================
 &SIMPARAMS
-J_1 		= 0.0    ! +1.0
-hx  		= 1.0    ! hx > 0 required
-hz          = 0    ! hz \in [-\infty, +\infty]; homogeneous longitudinal field
+J_1 		= 1.0     ! +1.0
+hx  		= 1.0     ! hx > 0 required
+hz              = 3.0     ! hz \in [-\infty, +\infty]; homogeneous longitudinal field
 temp 		= 0.1
 nx   		= 3
 ny   		= 3
 n_sites 	= 9
 lattice_type = "triangular"
-ignore_Jmatrix = F
+ignore_Jmatrix = T
 Jmatrix_file = "Jmatrix_nnFM.txt" !"Jmatrix_kagome2x2_FM.dat"  !"Jmatrix_nnFM.dat"  "J3x3_inplane.txt" 
-translat_invar = F
+translat_invar = T
 ignore_hz_fields = T
 hz_fields_file = "hz_fields.txt"
-C_par_hyperparam = 0
-ntherm_step = 1000
-nmeas_step  = 10000
+C_par_hyperparam = 1.0
+ntherm_step = 10000
+nmeas_step  = 100000
 Nbin        = 10
-paramscan   = "paramscan_hx"
+paramscan   = "paramscan_T"
 scan_min    = 0.1
-scan_max    = 2.0
+scan_max    = 5
 heavy_use   = F
 deterministic = T
 / 

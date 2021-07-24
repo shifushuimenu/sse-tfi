@@ -97,17 +97,16 @@ real(dp), intent(in) :: hz_fields(:)
 
 ! ... Local variables ...
 integer :: ip, i1, i2, index1, index2, index2_from_origin
+integer :: ii1
 integer :: r(2)
 integer :: sub1
-integer :: optype
+integer :: optype, optype_old
 
 integer :: plaq_idx
 
-real(dp) :: P_plus, P_minus, P_add, P_remove
+real(dp) :: P_add, P_remove
 real(dp) :: prob, eta
 integer :: alignment 
-logical :: OP_INSERTED 
-integer :: counter 
 
 ! REMOVE
 real(dp) :: norm 
@@ -121,12 +120,11 @@ integer, allocatable :: spins2(:)
 ! for plaquette-based cluster update 
 integer :: ir_A, ir_B, ir_C
 
-! "instantaneous" spin configuration
+! "instantaneous" spin configuration at a given propagation step 
 allocate(spins2( 1:size(spins,1) ))
-
 spins2(:) = spins(:)
 
-! Initialize P_add and P_remove given the current expansion order. 
+! Initialize P_add and P_remove given the current expansion order.
 P_remove = float(( config%LL - config%n_exp + 1)) &
           / ( float(config%LL- config%n_exp + 1) + beta*probtable%sum_all_diagmatrix_elements )
 P_add = beta*probtable%sum_all_diagmatrix_elements &
@@ -136,14 +134,14 @@ do ip=1, config%LL
 
   i1 = opstring(ip)%i 
   i2 = opstring(ip)%j
+  optype_old = opstring(ip)%optype
   
 !identity encountered
 if( (i1 == 0).and.(i2 == 0) ) then
-
-    P_plus = P_add    
-    call random_number(eta)
+    
+  call random_number(eta)
         
-  if( eta <= P_plus ) then
+  if( eta <= P_add ) then
   ! try to insert an operator  
 
    ! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -185,7 +183,7 @@ if( (i1 == 0).and.(i2 == 0) ) then
 ! spin configuration at ip. If it is forbidden, the replacement
 !     identity => Ising
 ! is not carried out. 
-! There is no risk of the search never ending as a constant can always be inserted (for h unequal 0 !).
+! There is no risk of the search never ending as a constant can always be inserted (for hx unequal 0 !).
 
     if (index1.ne.index2) then	! Ising operator, index1 and index2 not equal 0 by construction
       if( TRANSLAT_INVAR ) then 
@@ -209,6 +207,7 @@ if( (i1 == 0).and.(i2 == 0) ) then
 #endif       
           config%n_exp = config%n_exp + 1; config%n4leg = config%n4leg + 1
           ! update P_add and  P_remove
+          
           P_remove = float(( config%LL - config%n_exp + 1)) &
             / ( float(config%LL- config%n_exp + 1) + beta*probtable%sum_all_diagmatrix_elements )
           P_add = beta*probtable%sum_all_diagmatrix_elements &
@@ -235,7 +234,7 @@ if( (i1 == 0).and.(i2 == 0) ) then
             / ( float(config%LL-config%n_exp) + beta*probtable%sum_all_diagmatrix_elements )
         endif
       endif
-    else !index1.eq.index2 => constant operator to be inserted
+    else  ! index1.eq.index2 => constant operator to be inserted
     ! There is no constraint on inserting constants
         opstring(ip)%i = index1
         opstring(ip)%j = index2
@@ -303,6 +302,8 @@ if( (i1 == 0).and.(i2 == 0) ) then
      endif     
 #ifdef DEBUG_DIAGONAL_UPDATE
   print*, "insert a minimally frustrated plaquette operator, plaq_idx=", plaq_idx, "ut=", update_type
+  print*, "spins2(ir_A/B/C)=", spins2(ir_A), spins2(ir_B), spins2(ir_C), ir_A, ir_B, ir_C
+  print*, "spins2(:)=", spins2(:)
 #endif          
      config%n_exp = config%n_exp + 1; config%n6leg = config%n6leg + 1 
      ! update P_add and  P_remove
@@ -313,40 +314,82 @@ if( (i1 == 0).and.(i2 == 0) ) then
   endif 
   
   case( LONGITUDINAL )
-#ifdef DEBUG_DIAGONAL_UPDATE
-    print*, "insert longitudinal operator"
-#endif 
 
-    norm = 0
-    cumprob_hz(:) = 0.0_dp
-    do ir = 1, S%Nsites 
-         norm = norm + probtable%hz_matrix_element(ir)
-         cumprob_hz(ir) = norm 
-    enddo 
-    cumprob_hz(:) = cumprob_hz(:) / norm
+    ! ! -----------------------------------------
+    ! ! For inhomogeneous longitudinal fields 
+    ! ! -----------------------------------------
+! #ifdef DEBUG_DIAGONAL_UPDATE
+!     print*, "insert longitudinal operator"
+! #endif     
+    ! norm = 0.0_dp
+    ! cumprob_hz(:) = 0.0_dp
+    ! do ir = 1, S%Nsites 
+    !      norm = norm + probtable%hz_matrix_element(ir)
+    !      cumprob_hz(ir) = norm 
+    ! enddo 
+    ! cumprob_hz(:) = cumprob_hz(:) / norm
 
-    call assert(all(cumprob_hz>=0), 'all(cumprob_hz>0) failed')
+    ! call assert(all(cumprob_hz>=0), 'all(cumprob_hz>0) failed')
     
-    call random_number(eta)
-    i1 = binary_search(cumprob_hz, eta)
+    ! call random_number(eta)
+    ! ii1 = binary_search(cumprob_hz, eta)
 
-    if ( spins2(i1) == hz_fields_sign(i1) ) then           
-        alignment = +1
-    else 
-        alignment = -1
+    ! if ( spins2(ii1) == hz_fields_sign(ii1) ) then           
+    !     alignment = +1
+    ! else 
+    !     alignment = -1
+    ! endif 
+
+    ! opstring(ip)%optype = LONGITUDINAL 
+    ! opstring(ip)%i = ii1
+    ! opstring(ip)%j = -ii1         ! Actually, not necessary to set this entry, it is not used. 
+    ! opstring(ip)%k = alignment   ! The spin state is needed in the cluster update to accumulate the exchange fields.
+
+    ! config%n_exp = config%n_exp + 1; config%n2leg_hz = config%n2leg_hz + 1 
+
+    ! P_remove = float(( config%LL - config%n_exp + 1)) &
+    !     / ( float(config%LL- config%n_exp + 1) + beta*probtable%sum_all_diagmatrix_elements )
+    ! P_add = beta*probtable%sum_all_diagmatrix_elements &
+    !     / ( float(config%LL-config%n_exp) + beta*probtable%sum_all_diagmatrix_elements )
+
+    ! -------------------------------
+    ! pick a site at random 
+    call random_number(eta)
+    ii1 = int(eta * config%n_sites) + 1
+
+    ! choose one of the matrix elements of hz at random 
+    call random_number(eta)
+    if ( eta < ( 2*abs(hz_fields(ii1)) + C_par_hyperparam ) &
+        / ( 2*abs(hz_fields(ii1)) + 2*C_par_hyperparam ) ) then 
+      alignment = + 1
+    else
+      alignment = -1
     endif 
 
-    opstring(ip)%optype = LONGITUDINAL 
-    opstring(ip)%i = i1
-    opstring(ip)%j = -i1         ! Actually, not necessary to set this entry, it is not used. 
-    opstring(ip)%k = alignment   ! The spin state is needed in the cluster update to accumulate the exchange fields.
+    ! check whether the selected operator fits with the spin configuration 
+    if ( alignment == spins2(ii1) * hz_fields_sign(ii1) ) then 
 
-    config%n_exp = config%n_exp + 1; config%n2leg_hz = config%n2leg_hz + 1 
-    P_remove = float(( config%LL - config%n_exp + 1)) &
-        / ( float(config%LL- config%n_exp + 1) + beta*probtable%sum_all_diagmatrix_elements )
-    P_add = beta*probtable%sum_all_diagmatrix_elements &
-        / ( float(config%LL-config%n_exp) + beta*probtable%sum_all_diagmatrix_elements )
- 
+#ifdef DEBUG_DIAGONAL_UPDATE
+      print*, "insert longitudinal operator"
+#endif 
+  
+      opstring(ip)%optype = LONGITUDINAL 
+      opstring(ip)%i = ii1
+      opstring(ip)%j = -ii1         ! Actually, not necessary to set this entry, it is not used. 
+      opstring(ip)%k = alignment   ! The spin state is needed in the cluster update to accumulate the exchange fields.
+
+      config%n_exp = config%n_exp + 1; config%n2leg_hz = config%n2leg_hz + 1 
+
+      P_remove = float(( config%LL - config%n_exp + 1)) &
+          / ( float(config%LL- config%n_exp + 1) + beta*probtable%sum_all_diagmatrix_elements )
+      P_add = beta*probtable%sum_all_diagmatrix_elements &
+          / ( float(config%LL-config%n_exp) + beta*probtable%sum_all_diagmatrix_elements )
+
+    else
+      ! do nothing and go to next propagation step  
+    endif     
+    ! -------------------------------------     
+
   case default
       print*, "Diagonal update: Trying to insert unknown diagonal operator type"
       print*, "optype = ", optype
@@ -355,7 +398,7 @@ if( (i1 == 0).and.(i2 == 0) ) then
 
   end select choose_insert_optype
 
-  endif !if(prob <= P_plus)
+  endif !if(prob <= P_add)
   
 endif !identity encountered
 
@@ -364,10 +407,9 @@ endif !identity encountered
   ! Expansion order changes as n_exp -> n_exp - 1
   if ((i1.ne.0).and.(i2.ne.0)) then
 
-    P_minus = P_remove
     call random_number(prob)
      
-    if (prob <= P_minus) then
+    if (prob <= P_remove) then
 #ifdef DEBUG_DIAGONAL_UPDATE
       print*, "remove a diagonal operator"
 #endif      
@@ -759,26 +801,27 @@ subroutine update_probtables(S, probtable, hz_fields, C_par_hyperparam, spins)
   integer, intent(in)              :: spins(:)
   
   ! ... Local variables ...
-  real(dp) :: ss 
   integer :: ir, k
 
-  ss = 0.0_dp
+  probtable%hz_matrix_element(:) = 0.0_dp
   do ir = 1, S%Nsites
-    if (abs(hz_fields(ir)) > 0.0_dp) then 
-      ! The hz operators have two different matrix elements depending on the spin
-      ! configuration. Add only the matrix elements of the hz operator for the given 
-      ! instantaneous spin configuration.
-      ! Only add constants for non-zero fields. 
-      if (spins(ir) * hz_fields(ir) < 0.0_dp) then ! anti-aligned with the field 
-        ss = ss + C_par_hyperparam
-        probtable%hz_matrix_element(ir) = C_par_hyperparam
-      else if (spins(ir) * hz_fields(ir) > 0.0_dp) then ! aligned with the field
-        ss = ss + 2*abs(hz_fields(ir)) + C_par_hyperparam
-        probtable%hz_matrix_element(ir) = 2*abs(hz_fields(ir)) + C_par_hyperparam
-      endif
-    endif 
+    ! if (abs(hz_fields(ir)) > 0.0_dp) then 
+    !   ! The hz operators have two different matrix elements depending on the spin
+    !   ! configuration. Add only the matrix elements of the hz operator for the given 
+    !   ! instantaneous spin configuration.
+    !   ! Only add constants for non-zero fields. 
+    !   if (spins(ir) * hz_fields(ir) < 0.0_dp) then ! anti-aligned with the field 
+    !     probtable%hz_matrix_element(ir) = C_par_hyperparam
+    !   else if (spins(ir) * hz_fields(ir) > 0.0_dp) then ! aligned with the field
+    !     probtable%hz_matrix_element(ir) = 2*abs(hz_fields(ir)) + C_par_hyperparam
+    !   endif
+    ! endif 
+    ! REMOVE
+    ! Incpude both possible matrix elements on a site => Then, actually, the probability tables needn't be recomputed !!!
+    probtable%hz_matrix_element(ir) = 2*abs(hz_fields(ir)) + 2*C_par_hyperparam
+    ! REMOVE 
   enddo
-  probtable%sum_all_diagmatrix_elements_peropclass(3) = ss 
+  probtable%sum_all_diagmatrix_elements_peropclass(3) = sum(probtable%hz_matrix_element(:))
   probtable%sum_all_diagmatrix_elements = sum(probtable%sum_all_diagmatrix_elements_peropclass(:))
     
     ! Probability for inserting an operator from one of the

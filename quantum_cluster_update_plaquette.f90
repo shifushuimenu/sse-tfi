@@ -19,7 +19,7 @@ integer, parameter :: A_LEG=1, B_LEG=2, C_LEG=3
 ! due to the exchange field as a result of a 
 ! longitudinal field. 
 ! (module-level variable)
-real(dp) :: wratio_exchange_field
+real(dp) :: weight_new, weight_old ! product of weights of all longitudinal field operators before and after flip
 
 contains 
 
@@ -150,8 +150,6 @@ logical :: touched( config%n_sites )
 ! Has the operator at propagation step ip been visited by the current Swendsen-Wang cluster ?
 ! (only for visualization purposes)
 logical :: visited_ip( config%LL )
-! Space-time lattice of spins 
-integer :: spins_spacetime(config%n_sites, config%LL)
 #endif 
 
 ! FLIPPING indicates whether a Swendsen-Wang cluster should be flipped 
@@ -164,25 +162,12 @@ real(dp) :: prob
 
 integer :: leg_start, leg, leg_next
 integer :: dir 
-integer :: ip, ir, l  
-
-#ifdef DEBUG_CLUSTER_UPDATE
+integer :: ip, ir, l
 integer :: spins2(size(spins,dim=1))
 integer :: i1, i2, i3
+
+#ifdef DEBUG_CLUSTER_UPDATE
     print*, "initial spin config=", spins(:)
-
-    spins2(:) = spins(:)
-    do ip=1,config%LL
-        i1 = opstring(ip)%i
-        i2 = opstring(ip)%j
-        i3 = opstring(ip)%k
-        spins_spacetime(:, ip) = spins2(:)
-        ! Propagate spins as spin-flip operators are encountered.
-        if ((i1.ne.0).and.(i2.eq.0)) then
-            spins2(i1) = -spins2(i1)
-        endif
-    enddo
-
 #endif 
 
 call stack%init( config%n_legs )  
@@ -215,7 +200,8 @@ deterministic_cluster_construction: do while( LEGS_TO_BE_PROCESSED )
     ! Weight ratio for flipping the current cluster
     ! due to the exchange field as a result of a 
     ! longitudinal field.
-    wratio_exchange_field = 1.0_dp
+    weight_new = 1.0_dp
+    weight_old = 1.0_dp
     ! Copy the operator string in order to restore it 
     ! if a cluster flip is rejected  
     old_opstring(:) = opstring(:)
@@ -273,11 +259,11 @@ deterministic_cluster_construction: do while( LEGS_TO_BE_PROCESSED )
     ! Decide whether to flip the just constructed cluster
     ! with heat bath probability
     call random_number(prob)
-    if( prob < wratio_exchange_field / (1.0_dp + wratio_exchange_field) ) then 
+    if( prob < weight_new / (weight_new + weight_old) ) then 
         ! Accept the flipped clusters and 
         ! update the initial spin configuration.
 #ifdef DEBUG_CLUSTER_UPDATE
-        print*, "flip the winding macrospins, weight_ratio=", wratio_exchange_field
+        print*, "flip the winding macrospins, weight_ratio=", weight_new / (weight_new + weight_old) 
 #endif 
         do ir = 1, config%n_sites
             if (WINDING_MACROSPIN(ir)) then
@@ -288,7 +274,7 @@ deterministic_cluster_construction: do while( LEGS_TO_BE_PROCESSED )
         ! Reject the flipping of the cluster
         opstring(:) = old_opstring(:)
 #ifdef DEBUG_CLUSTER_UPDATE        
-        print*, "reject cluster flip, weight_ratio=", wratio_exchange_field
+        print*, "reject cluster flip, weight_ratio=", weight_new / (weight_new + weight_old) 
 #endif         
     endif 
 
@@ -313,7 +299,7 @@ deterministic_cluster_construction: do while( LEGS_TO_BE_PROCESSED )
 
 enddo deterministic_cluster_construction
 
-        ! Flip all spins that are not part of a cluster with probability 1/2.
+! Flip all spins that are not part of a cluster with probability 1/2.
 do ir = 1, config%n_sites
     if (.not.touched(ir)) then
       call random_number(prob)
@@ -598,7 +584,7 @@ operator_types: select case( opstring(ip)%optype )
     case( LONGITUDINAL )
         ! The leg is connected to a longitudinal field operator. 
         ! The cluster does NOT stop, i.e. put the other leg onto
-        ! the stack. Accumulate the product of the weight ratios
+        ! the stack. Accumulate the product of new weights and old weights
         ! due to the exchange field that arises if the cluster is flipped.
         ! dir = +1 => UP; dir = -1 => DOWN 
         leg2 = gleg - dir * MAX_GHOSTLEGS_HALF
@@ -607,31 +593,25 @@ operator_types: select case( opstring(ip)%optype )
         leg_visited(leg2) = .true.
         touched(i1) = .true.    
 
-        if( FLIPPING ) then 
-            ! For longitudinal field (`hz`) operators, the structure component
-            ! opstring(ip)%k is used to store whether the hz operator 
-            ! is aligned with the spin it is sitting on or not. opstring(ip)%k = +1(-1) means
-            ! aligned (anti-aligned).
-            alignment = opstring(ip)%k
-            if( alignment > 0 ) then 
-                ! spin aligned with the field:
-                ! accumulate weight ratio weight_new / weight_old 
-                wratio_exchange_field = wratio_exchange_field &
-                    * C_par_hyperparam / (TWO * abs(hz_fields(i1)) + C_par_hyperparam)
-            else 
-                ! spin not aligned or zero longitudinal field 
-                if( C_par_hyperparam > 0 ) then 
-                    wratio_exchange_field = wratio_exchange_field &
-                        * (TWO * abs(hz_fields(i1)) + C_par_hyperparam) / C_par_hyperparam
-                else
-                    wratio_exchange_field = 1.0_dp
-                endif 
-            endif 
-            ! Convert (hz,aligned) into (hz,antialigned) vertex and vice versa.
-            ! Note: (hz,aligned) and (hz,antialigned) are two different vertices with 
-            !       different weights. 
-            opstring(ip)%k = -opstring(ip)%k
-        endif    
+        ! For longitudinal field (`hz`) operators, the structure component
+        ! opstring(ip)%k is used to store whether the hz operator 
+        ! is aligned with the spin it is sitting on or not. opstring(ip)%k = +1(-1) means
+        ! aligned (anti-aligned).
+        alignment = opstring(ip)%k
+
+        if (alignment > 0) then 
+            ! spin aligned with the field 
+            weight_new = weight_new * C_par_hyperparam
+            weight_old = weight_old * (TWO * abs(hz_fields(i1)) + C_par_hyperparam)
+        else
+            weight_old = weight_old * C_par_hyperparam
+            weight_new = weight_new * (TWO * abs(hz_fields(i1)) + C_par_hyperparam)
+        endif 
+        ! Convert (hz,aligned) into (hz,antialigned) vertex and vice versa.
+        ! Note: (hz,aligned) and (hz,antialigned) are two different vertices with 
+        !       different weights. 
+        opstring(ip)%k = -opstring(ip)%k
+
         
     case default
         print*, "cluster update: strange operator detected"

@@ -445,7 +445,7 @@ program ssetfi
         call one_MCS_plaquette( S=S, beta=beta, Jij_sign=Jij_sign, hz_fields_sign=hz_fields_sign, &
             TRANSLAT_INVAR=translat_invar, spins=spins, opstring=opstring, config=config, & 
             probtable=probtable, plaquettes=plaquettes, vertexlink=vertexlink, leg_visited=leg_visited, &
-            hz_fields=hz_fields, C_par_hyperparam=C_par_hyperparam )
+            hz_fields=hz_fields, C_par_hyperparam=C_par_hyperparam )       
         call Phys_Measure(P0, S, Kgrid, MatsuGrid, config, spins, opstring, &
             beta, probtable%consts_added, heavy_use=heavy_use)
 
