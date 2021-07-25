@@ -315,44 +315,48 @@ if( (i1 == 0).and.(i2 == 0) ) then
   
   case( LONGITUDINAL )
 
-    ! ! -----------------------------------------
-    ! ! For inhomogeneous longitudinal fields 
-    ! ! -----------------------------------------
+!     ! -----------------------------------------
+!     ! For inhomogeneous longitudinal fields (variant 1)
+!     ! Probability tables need to be recomputed after each spin flip. 
+!     ! -----------------------------------------
 ! #ifdef DEBUG_DIAGONAL_UPDATE
 !     print*, "insert longitudinal operator"
 ! #endif     
-    ! norm = 0.0_dp
-    ! cumprob_hz(:) = 0.0_dp
-    ! do ir = 1, S%Nsites 
-    !      norm = norm + probtable%hz_matrix_element(ir)
-    !      cumprob_hz(ir) = norm 
-    ! enddo 
-    ! cumprob_hz(:) = cumprob_hz(:) / norm
+!     norm = 0.0_dp
+!     cumprob_hz(:) = 0.0_dp
+!     do ir = 1, S%Nsites 
+!          norm = norm + probtable%hz_matrix_element(ir)
+!          cumprob_hz(ir) = norm 
+!     enddo 
+!     cumprob_hz(:) = cumprob_hz(:) / norm
 
-    ! call assert(all(cumprob_hz>=0), 'all(cumprob_hz>0) failed')
+!     call assert(all(cumprob_hz>=0), 'all(cumprob_hz>0) failed')
     
-    ! call random_number(eta)
-    ! ii1 = binary_search(cumprob_hz, eta)
+!     call random_number(eta)
+!     ii1 = binary_search(cumprob_hz, eta)
 
-    ! if ( spins2(ii1) == hz_fields_sign(ii1) ) then           
-    !     alignment = +1
-    ! else 
-    !     alignment = -1
-    ! endif 
+!     if ( spins2(ii1) == hz_fields_sign(ii1) ) then           
+!         alignment = +1
+!     else 
+!         alignment = -1
+!     endif 
 
-    ! opstring(ip)%optype = LONGITUDINAL 
-    ! opstring(ip)%i = ii1
-    ! opstring(ip)%j = -ii1         ! Actually, not necessary to set this entry, it is not used. 
-    ! opstring(ip)%k = alignment   ! The spin state is needed in the cluster update to accumulate the exchange fields.
+!     opstring(ip)%optype = LONGITUDINAL 
+!     opstring(ip)%i = ii1
+!     opstring(ip)%j = -ii1         ! Actually, not necessary to set this entry, it is not used. 
+!     opstring(ip)%k = alignment   ! The spin state is needed in the cluster update to accumulate the exchange fields.
 
-    ! config%n_exp = config%n_exp + 1; config%n2leg_hz = config%n2leg_hz + 1 
+!     config%n_exp = config%n_exp + 1; config%n2leg_hz = config%n2leg_hz + 1 
 
-    ! P_remove = float(( config%LL - config%n_exp + 1)) &
-    !     / ( float(config%LL- config%n_exp + 1) + beta*probtable%sum_all_diagmatrix_elements )
-    ! P_add = beta*probtable%sum_all_diagmatrix_elements &
-    !     / ( float(config%LL-config%n_exp) + beta*probtable%sum_all_diagmatrix_elements )
+!     P_remove = float(( config%LL - config%n_exp + 1)) &
+!         / ( float(config%LL- config%n_exp + 1) + beta*probtable%sum_all_diagmatrix_elements )
+!     P_add = beta*probtable%sum_all_diagmatrix_elements &
+!         / ( float(config%LL-config%n_exp) + beta*probtable%sum_all_diagmatrix_elements )
 
-    ! -------------------------------
+    ! --------------------------------------------------
+    ! For inhomogeneous longitudinal fields (variant 2)
+    ! Probability tables need not be recomputed => better 
+    ! --------------------------------------------------        
     ! pick a site at random 
     call random_number(eta)
     ii1 = int(eta * config%n_sites) + 1
@@ -817,7 +821,7 @@ subroutine update_probtables(S, probtable, hz_fields, C_par_hyperparam, spins)
     !   endif
     ! endif 
     ! REMOVE
-    ! Incpude both possible matrix elements on a site => Then, actually, the probability tables needn't be recomputed !!!
+    ! Include both possible matrix elements on a site => Then, actually, the probability tables needn't be recomputed !!!
     probtable%hz_matrix_element(ir) = 2*abs(hz_fields(ir)) + 2*C_par_hyperparam
     ! REMOVE 
   enddo

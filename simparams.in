@@ -39,7 +39,7 @@
 !   or not.
 ! ignore_hz_fields: 
 !   Whether the following input file should be used or not. 
-! hz_fields_file = "hz_fields.txt":
+!   hz_fields_file = "hz_fields.txt":
 !   Value of the longitudinal field for each site. Allowed values 
 !   are [-\infty, +\infty]. Reading this file supersedes
 !   the value for a homogeneous longitudinal field given in `hz`. 
@@ -82,7 +82,7 @@ lattice_type = "triangular"
 ignore_Jmatrix = T
 Jmatrix_file = "Jmatrix_nnFM.txt" !"Jmatrix_kagome2x2_FM.dat"  !"Jmatrix_nnFM.dat"  "J3x3_inplane.txt" 
 translat_invar = T
-ignore_hz_fields = T
+ignore_hz_fields = F
 hz_fields_file = "hz_fields.txt"
 C_par_hyperparam = 1.0
 ntherm_step = 10000

@@ -386,9 +386,7 @@ program ssetfi
     else
         if( MPI_rank == root_rank ) then 
             open(200, file=trim(hz_fields_file), action="read", status="old")
-            do i = 1, S%Nsites 
-                read(200, *) hz_fields(i)
-            enddo
+            read(200, *) hz_fields(1:S%Nsites)
             close(200)
         endif 
 #if defined(USE_MPI)
