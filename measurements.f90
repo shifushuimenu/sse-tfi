@@ -6,6 +6,7 @@ module measurements
     use SSE_configuration 
     use lattice, only: Struct, t_Kgrid, momentum_grid_triangular_Bravais
     use tau_embedding
+    use simparameters
     implicit none 
 
     ! Number of array-valued properties 
@@ -20,23 +21,26 @@ module measurements
 
     ! Parameter for the indexing of scalar variables 
     integer, parameter :: P0_ENERGY = 1
-    integer, parameter :: P0_MAGNETIZATION = 2   ! uniform magnetization per site 
+    integer, parameter :: P0_MAGNETIZATION = 2   ! uniform z-magnetization per site 
     integer, parameter :: P0_COPARAM = 3         ! clock-order parameter (triangular lattice)
     integer, parameter :: P0_AV_NEXP = 4         ! average expansion order 
     integer, parameter :: P0_AV_NEXP2 = 5        ! average expansion order squared 
     integer, parameter :: P0_SPECIFIC_HEAT = 6   ! specific heat per site 
+    integer, parameter :: P0_XMAGNETIZATION = 7  ! uniform x-magnetization per site 
 
     ! Total number of scalar variables 
-    integer, parameter :: P0_N = 6
+    integer, parameter :: P0_N = 7
 
     ! Name of scalar variables 
     character(len=*), parameter :: P0_STR(P0_N) = (/&
         "          Energy (per site):     ", &
-        "          Magnetization :        ", &
+        "          Z-Magnetization :      ", &
         "          Clock order parameter: ", &
         "          av. expansion order:   ", &
         "   av. expansion order  squared: ", &
-        "       specific heat (per site): "/)
+        "       specific heat (per site): ", &
+        "          X-Magnetization :      "  &
+                                                  /)
 
     type Phys
         ! Monte Carlo measurements 
@@ -72,7 +76,6 @@ module measurements
         ! the real part is needed. 
         real(dp), pointer :: AzBzq_Matsu(:,:)
 
-
         logical :: init 
         logical :: compSFA  ! whether to compute structure factor
         logical :: compTAU  ! whether to compute imaginary-time dependent quantities
@@ -81,7 +84,7 @@ module measurements
 
     contains 
 
-    subroutine Phys_Init(P0, S, Kgrid, MatsuGrid, beta, Nbin, nmeas)
+    subroutine Phys_Init(P0, S, Kgrid, MatsuGrid, Sim, Nbin, nmeas)
     ! 
     ! Purpose:
     ! ========
@@ -98,7 +101,7 @@ module measurements
     type(Struct), intent(in) :: S
     type(t_Kgrid), intent(inout) :: Kgrid 
     type(t_MatsuGrid), intent(inout) :: MatsuGrid
-    real(dp), intent(in) :: beta
+    type(t_Simparams), intent(in) :: Sim
     integer, intent(in) :: Nbin         ! Number of bins 
     integer, intent(in) :: nmeas        ! total number of measurement steps 
 
@@ -114,7 +117,7 @@ module measurements
     P0%Nbin = Nbin 
     P0%nmeas = nmeas 
     P0%Nsites = S%Nsites 
-    P0%beta = beta 
+    P0%beta = Sim%beta 
 
     P0%avg = Nbin + 1
     P0%err = Nbin + 2 
@@ -127,7 +130,7 @@ module measurements
     ! heavy use
     call momentum_grid_triangular_Bravais(S=S, Kgrid=Kgrid)
 
-    call init_MatsuGrid(beta=beta, MatsuGrid=MatsuGrid)
+    call init_MatsuGrid(beta=Sim%beta, MatsuGrid=MatsuGrid)
     P0%Nq = Kgrid%Nq
     P0%N_Matsubara = MatsuGrid%N_Matsubara
 
@@ -298,9 +301,10 @@ module measurements
 
     
     subroutine Phys_Measure(P0, S, Kgrid, MatsuGrid, config, spins, opstring, &
-                beta, consts_added, heavy_use)
+                Sim, consts_added, heavy_use)
         use util, only: spins2binrep
         use ssetfi_globals, only: sublattice 
+        implicit none 
         ! Arguments:
         ! ==========
         type(Phys), intent(inout) :: P0
@@ -310,13 +314,15 @@ module measurements
         type(t_Config) :: config 
         integer, intent(in) :: spins(:)
         type(t_BondOperator), intent(in) :: opstring(:)
-        real(dp), intent(in) :: beta
+        type(t_Simparams), intent(in) :: Sim
         real(dp), intent(in) :: consts_added
         logical, intent(in) :: heavy_use
 
         ! ... Local variables ...
         integer :: optype 
         real(dp) :: energy, magnz, magnz2
+        real(dp) :: magnx
+        integer :: n2leg_hx                      ! number of spin-flip operators in the operator string 
         complex(dp) :: COparam_                  ! complex clock order parameter 
         real(dp) :: COparam                      ! absolute value of the clock order parameter
         complex(dp) :: COphase(3)                ! sublattice phase factors for clock order parameter
@@ -337,10 +343,10 @@ module measurements
                             ! to avoid introducing new variables, e.g. energy, magnetization etc. 
 
         LL = config%LL
-        Nsites = config%N_sites
+        Nsites = config%n_sites
 
-        energy = (- config%n_exp / beta + consts_added) / float(Nsites)
-
+        energy = (- config%n_exp / Sim%beta + consts_added) / config%n_sites
+    
         spins_tmp(:) = spins(:)
         l_nochange = 0
         factor = ONE / float(LL)
@@ -351,6 +357,7 @@ module measurements
         magnz = 0.0_dp
         magnz2 = 0.0_dp
         COparam = 0.0_dp
+        n2leg_hx = 0
         do ip = 1, LL
 
             l_nochange = l_nochange + 1
@@ -363,6 +370,7 @@ module measurements
                 ! does not change. Count for how many propagation steps the spin configuration 
                 ! stays constant (=l_nochange) and weight the spin config before the next 
                 ! spin flip operator by that fraction of LL.  
+                n2leg_hx = n2leg_hx +1 
                 magnz_tmp = sum(spins_tmp(:)) / float(Nsites)                
                 magnz = magnz + magnz_tmp * l_nochange * factor 
                 magnz2 = magnz2 + magnz_tmp**2 * l_nochange * factor 
@@ -371,15 +379,16 @@ module measurements
                     COparam_ = COparam_ + spins_tmp(ir)*COphase(sublattice(ir))
                 enddo 
                 COparam = COparam + abs(COparam_) * l_nochange * factor 
-
                 spins_tmp(i1) = -spins_tmp(i1)
                 ! reset 
                 l_nochange = 0
             endif
+
         enddo 
         ! Take care of the segment of propagation steps from the last spin 
         ! flip operator up to ip=LL.
 
+        magnx = n2leg_hx / (Sim%beta * config%n_sites * Sim%hx)
         magnz_tmp = sum(spins_tmp(:)) / float(Nsites)
         magnz = magnz + magnz_tmp * l_nochange * factor 
         magnz2 = magnz2 + magnz_tmp**2 * l_nochange * factor 
@@ -392,10 +401,11 @@ module measurements
         COparam = COparam * 3.0_dp / float(Nsites)
 
         P0%meas(P0_ENERGY, tmp_idx) = energy
-        P0%meas(P0_MAGNETIZATION, tmp_idx) = magnz2 ! magnz
+        P0%meas(P0_MAGNETIZATION, tmp_idx) = magnz ! magnz2
         P0%meas(P0_COPARAM, tmp_idx) = COparam
         P0%meas(P0_AV_NEXP, tmp_idx) = config%n_exp
         P0%meas(P0_AV_NEXP2, tmp_idx) = config%n_exp**2
+        P0%meas(P0_XMAGNETIZATION, tmp_idx) = magnx
         ! fluctuation-dissipation quantities are only defined *over* a bin,
         ! not in a single configuration 
         P0%meas(P0_SPECIFIC_HEAT, tmp_idx) = 0.0_dp   
@@ -411,7 +421,7 @@ module measurements
 
         if( heavy_use ) then 
             call measure_SzSzTimeCorr(Matsu=MatsuGrid, Kgrid=Kgrid, config=config, S=S, &
-                opstring=opstring, spins=spins, beta=beta, chiqAzBz=AzBzq_temp)
+                opstring=opstring, spins=spins, beta=Sim%beta, chiqAzBz=AzBzq_temp)
             
             ! Flatten the array (and transpose). The index of the flattened array runs for each momentum point
             ! over all Matsubara indices. This convention must be remembered when outputting the array. 
@@ -425,7 +435,7 @@ module measurements
     end subroutine Phys_Measure
 
 
-    subroutine Phys_Print(P0, Kgrid, S, MatsuGrid, hx, temp, hz, heavy_use)
+    subroutine Phys_Print(P0, Kgrid, S, MatsuGrid, Sim)
         use MPI_parallel, only: MPI_rank, chr_rank, root_rank     ! global variables, IMPROVE
         implicit none 
 
@@ -435,16 +445,14 @@ module measurements
         type(t_Kgrid), intent(in)     :: Kgrid 
         type(Struct), intent(in)      :: S
         type(t_MatsuGrid), intent(in) :: MatsuGrid 
-        logical, intent(in)           :: heavy_use
-        ! IMPROVE: combine parameters into a struct
-        real(dp), intent(in) :: hx, temp, hz
+        type(t_Simparams), intent(in) :: Sim
 
         ! ... Local variables ...
         integer :: obs, m, q, idx
 
         real(dp) :: qvec(2)
 
-        print*, hx, temp, hz, &
+        print*, Sim%hx, Sim%temp, Sim%hz, &
         P0%meas(P0_ENERGY, P0%avg), P0%meas(P0_ENERGY, P0%err), &
         P0%meas(P0_MAGNETIZATION, P0%avg), P0%meas(P0_MAGNETIZATION, P0%err), &
         P0%meas(P0_COPARAM, P0%avg), P0%meas(P0_COPARAM, P0%err), &
@@ -452,11 +460,11 @@ module measurements
 
         ! Averages, error bars and autocorrelation times for all scalar quantities 
         open(500, file='averages'//chr_rank//'.dat', position='append', status='unknown')
-        write(500, *) hx, temp, hz,  &
+        write(500, *) Sim%hx, Sim%temp, Sim%hz,  &
             ( P0%meas(obs, P0%avg), P0%meas(obs, P0%err), P0%meas(obs, P0%ac_time), obs = 1, P0%Nscalar_prop )
         close(500)
 
-        if( heavy_use ) then 
+        if( Sim%heavy_use ) then 
             ! Write out average of imaginary time correlation function 
             open(100, file="Sqz_matsu"//chr_rank//".dat", position="append", status="unknown")
             do m = 1, MatsuGrid%N_Matsubara
@@ -503,7 +511,6 @@ module measurements
             enddo
             close(700)
         endif 
-
 
     end subroutine     
 

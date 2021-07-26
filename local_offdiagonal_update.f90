@@ -1,4 +1,7 @@
-! IMPROVE: do not allocate arrays of length LL, find a more appropriate way since LL can be very large.
+! TODO:
+!  - Do not allocate arrays of length LL, find a more appropriate way since LL can be very large.
+!  - Longitudinal field operators.
+!  - Code verification for a single spin in a longitudinal and transverse field. 
 
 module local_update
 
@@ -125,8 +128,7 @@ do ip = 1, config%LL
               ipsite(n_tot)%ip = ip
               ipsite(n_tot)%ir = sites(ix)
           endif 
-        enddo 
-      
+        enddo       
       case(TRIANGULAR_PLAQUETTE)
         i3 = opstring(ip)%k
         sites(1:3) = (/abs(i1), abs(i2), abs(i3)/)

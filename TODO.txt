@@ -13,6 +13,6 @@
 8. Use alias method for speeding up the diagonal update.   
 9. Make contruction of linked list generic (for differently sized plaquettes, by using MAX_GHOSTLEGS 
    and MAX_GHOSTLEGS_HALF rather than numeric values)
-10. Include a site-dependent longitudinal field. This requires small hanges to 
+10. Include a site-dependent longitudinal field. This requires small changes to 
    diagonal update and substantial changes to the multibranch cluster update
-   because of cluster cannot always be flipped. 
+   because a cluster cannot always be flipped. (DONE)

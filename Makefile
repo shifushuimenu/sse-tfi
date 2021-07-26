@@ -18,6 +18,7 @@ ssetfi_objects =  class_Stack.o \
 		  quantum_cluster_update_plaquette.o \
 		  local_offdiagonal_update.o \
 		  quicksort.o tau_embedding.o \
+		  simparameters.o \
 		  measurements.o \
 	  
 	

@@ -6,6 +6,7 @@ module ssetfi_main
     use cluster_update
     use local_update
     use linked_list
+    use simparameters
 
     implicit none
     private 
@@ -133,38 +134,12 @@ program ssetfi
     use tau_embedding 
     implicit none 
 
-    ! **************************************************
-    ! simulation parameters:           
-    ! ----------------------
-    ! Their values are overwritten from the input file.
-    ! **************************************************
-    REAL(dp) :: J_1 = +1.0_dp    
-    real(dp) :: hx = 0.60_dp       ! transverse field (in units of J_1)
-    real(dp) :: temp = 0.1_dp      ! temperature (in units of J_1)
-    real(dp) :: beta               ! inverse temperature 
-    integer :: nx, ny, n_sites             
 
-    integer :: nmeas_step = 10000
-    integer :: ntherm_step = 10000 
-    integer :: Nbin = 100
-    character(len=10) :: lattice_type = "triangular"
-    logical :: ignore_Jmatrix = .FALSE.
-    character(len=30) :: Jmatrix_file = "Jmatrix.txt"
-    logical :: translat_invar = .TRUE.
-    character(len=12) :: paramscan
-    real(dp) :: scan_min = 0.0, scan_max = 0.0
-    logical :: heavy_use = .FALSE.
-    logical :: deterministic = .FALSE.
-    real(dp) :: hz = 0.1_dp  
-    character(len=30) :: hz_fields_file = "hz_fields.txt"
-    logical :: ignore_hz_fields = .FALSE.
-    ! (tuneable) hyperparameter of the algorithm with longitudinal field    
-    real(dp) :: C_par_hyperparam = 0.1_dp  ! allowed range [0, +\infty]    
+    type(t_Simparams) :: Sim
 
     ! Imaginary time correlations 
     type(t_MatsuGrid)  :: MatsuGrid
-    ! **************************************************
-
+    
     type(Phys) :: P0
     type(Struct) :: S
     type(t_Kgrid) :: Kgrid
@@ -236,8 +211,31 @@ program ssetfi
         print*, "ERROR: Unknown value of input parameter `paramscan`"
         stop
     endif 
-    beta = 1.0_dp / temp
 
+    beta = 1.0_dp / temp
+    Sim%J_1=J_1 
+    Sim%hx=hx
+    Sim%temp=temp
+    Sim%beta=1.0_dp/temp
+    Sim%nx=nx
+    Sim%ny=ny
+    Sim%n_sites=n_sites
+    Sim%nmeas_step=nmeas_step
+    Sim%ntherm_step=ntherm_step
+    Sim%Nbin=Nbin
+    Sim%lattice_type=lattice_type
+    Sim%ignore_Jmatrix=ignore_Jmatrix
+    Sim%Jmatrix_file=Jmatrix_file
+    Sim%translat_invar=translat_invar
+    Sim%paramscan=paramscan
+    Sim%scan_min=scan_min
+    Sim%scan_max=scan_max
+    Sim%heavy_use=heavy_use
+    Sim%deterministic=deterministic
+    Sim%hz=hz
+    Sim%hz_fields_file=hz_fields_file
+    Sim%ignore_hz_fields=ignore_hz_fields
+    Sim%C_par_hyperparam=C_par_hyperparam
 
     if (nmeas_step < Nbin) then 
         print*, "Need nmeas_step >= Nbin."
@@ -434,7 +432,7 @@ program ssetfi
         endif 
     enddo
 
-    call Phys_Init(P0=P0, S=S, Kgrid=Kgrid, MatsuGrid=MatsuGrid, beta=beta,&
+    call Phys_Init(P0=P0, S=S, Kgrid=Kgrid, MatsuGrid=MatsuGrid, Sim=Sim,&
          Nbin=Nbin, nmeas=nmeas_step)
 
     call system_clock(count=t1)
@@ -445,7 +443,7 @@ program ssetfi
             probtable=probtable, plaquettes=plaquettes, vertexlink=vertexlink, leg_visited=leg_visited, &
             hz_fields=hz_fields, C_par_hyperparam=C_par_hyperparam )       
         call Phys_Measure(P0, S, Kgrid, MatsuGrid, config, spins, opstring, &
-            beta, probtable%consts_added, heavy_use=heavy_use)
+            Sim, probtable%consts_added, heavy_use=heavy_use)
 
         if ( mod(iim, nmeas_step / Nbin) == 0 ) then 
             call Phys_Avg(P0)
@@ -460,8 +458,7 @@ program ssetfi
 
     call Phys_GetErr(P0)
 
-    call Phys_Print(P0=P0, Kgrid=Kgrid, S=S, MatsuGrid=MatsuGrid, hx=hx, &
-            temp=temp, hz=hz, heavy_use=heavy_use)
+    call Phys_Print(P0=P0, Kgrid=Kgrid, S=S, MatsuGrid=MatsuGrid, Sim=Sim)
 
     call deallocate_globals
 

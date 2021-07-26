@@ -28,7 +28,7 @@ module SSE_configuration
       integer :: n_legs       ! Total number of physical (!) vertex legs: n_legs=6*n6leg+4*n4leg+2*n2leg
       integer :: n6leg        ! Number of triangular plaquette (i.e. 6-leg) vertices
       integer :: n4leg        ! Number of Ising (i.e. 4-leg) vertices 
-      integer :: n2leg        ! Number of constant or spin-flip (i.e. 2-leg) vertices 
+      integer :: n2leg        ! Number of constant or spin-flip vertices 
       integer :: n2leg_hz     ! Number of longitudinal field (hz) vertices
       integer :: n_ghostlegs  ! Total number of all legs, including 'ghostlegs': 
                               !     n_ghostlegs = n_exp * MAX_GHOSTLEGS
