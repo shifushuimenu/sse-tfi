@@ -436,6 +436,7 @@ endif !identity encountered
         case( LONGITUDINAL )
           config%n2leg_hz = config%n2leg_hz - 1
         case default 
+          print*, "optype=", optype
           stop "diagonal_update(): ERROR: trying to remove unknown operator type"
       end select 
       

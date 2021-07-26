@@ -44,6 +44,8 @@ integer, allocatable  :: opstring_site(:, :)
 ! NOTE: The arrays opstring_site(ir,:) have by default length LL. Most of the entries are not used and therefore
 ! not initialized. Here it is assumed that they are initialized by default (i.e. when allocating) to a value
 ! different from -1, 1 or 2.
+
+! IMPROVE: These operators are already defined in SSE_configuration.f90 with different number codes. 
 integer :: DELIMITER, CONST_OP, FLIP_OP, NOT_USED
 parameter (DELIMITER = -1)
 parameter (CONST_OP = 1)
@@ -81,7 +83,7 @@ allocate(opstring_site(config%n_sites,5*config%LL))
 opstring_site(:,:) = NOT_USED ! initialize to invalid values 
 allocate(n_opstring_site(config%n_sites)) ! Mustn't the length of opstring_site and ipsite be 2*LL ??????
 allocate(counter(config%n_sites))
- counter(:) = 0
+counter(:) = 0
 allocate(ISING_LAST(config%n_sites))
 ISING_LAST(:) = .FALSE.  
 allocate(ipsite(5*config%LL))
@@ -190,23 +192,23 @@ do ir=1, config%n_sites
 ! and update the spin at site ir if WRAPPING = .TRUE.
 ! NOTE that - by construction - there should never be two delimiter operators on consecutive positions
       if (op1 == CONST_OP) then
-	op1_new = FLIP_OP
-	op2_new = FLIP_OP
-	if (WRAPPING) then
-	  spins(ir) = - spins(ir)
-	endif
+	      op1_new = FLIP_OP
+	      op2_new = FLIP_OP
+        if (WRAPPING) then
+          spins(ir) = - spins(ir)
+        endif
       elseif (op1 == FLIP_OP) then
-	op1_new = CONST_OP
-	op2_new = CONST_OP
-	if (WRAPPING) then
-	  spins(ir) = - spins(ir)
-	endif
+        op1_new = CONST_OP
+        op2_new = CONST_OP
+        if (WRAPPING) then
+          spins(ir) = - spins(ir)
+        endif
       else
 !!!!!?????? Two Ising delimiters in a row across the boundary in imaginary time => don't exit ?????
         if ( .not.(ip_site == n_opstring_site(ir))) then 
-	  print*, "Error: Two strange operators in a row opstring_site(ir,:) ", "ir =", ir
-	  print*, "ir=", ir, " ip_site=", ip_site, " op(ip_site)=", op1, " op(ip_site+1)=", op2
-	  print*, "Here is the operator substring on site ir=", ir
+          print*, "Error: Two strange operators in a row opstring_site(ir,:) ", "ir =", ir
+          print*, "ir=", ir, " ip_site=", ip_site, " op(ip_site)=", op1, " op(ip_site+1)=", op2
+          print*, "Here is the operator substring on site ir=", ir
           do ii=1, n_opstring_site(ir)
               print*, ii, opstring_site(ir, ii)
           enddo 
@@ -221,12 +223,12 @@ do ir=1, config%n_sites
 !                   endif 
 !               endif 
 !           enddo
-	  stop
+	        stop
         endif
 ! Do nothing, i.e. keep the adjacent Ising delimiters 
 ! across the boundary in imaginary time in their positions
-	op1_new = op1
-	op2_new = op2  
+        op1_new = op1
+        op2_new = op2  
       endif
 
    elseif (op1 /= op2) then
@@ -239,25 +241,25 @@ do ir=1, config%n_sites
 ! the initial spin configuration has to be updated. Only the (unconstrained) spin sequence between
 ! those two operators accross imaginary time is affected by this update.
       if ((op1 == CONST_OP).and.(op2 == FLIP_OP)) then
-	op1_new = FLIP_OP
-	op2_new = CONST_OP
-	if (WRAPPING) then
-	  spins(ir) = - spins(ir)
-	endif
+        op1_new = FLIP_OP
+        op2_new = CONST_OP
+        if (WRAPPING) then
+          spins(ir) = - spins(ir)
+        endif
       elseif ((op1 == FLIP_OP).and.(op2 == CONST_OP)) then
-	op1_new = CONST_OP
-	op2_new = FLIP_OP
-	if (WRAPPING) then
-	  spins(ir) = - spins(ir)
-	endif
+        op1_new = CONST_OP
+        op2_new = FLIP_OP
+        if (WRAPPING) then
+          spins(ir) = - spins(ir)
+        endif
       elseif ((op1 == DELIMITER).and.(op2 /= DELIMITER)) then
 	! Do nothing
-	op1_new = op1
-	op2_new = op2
+        op1_new = op1
+        op2_new = op2
       elseif ((op2 == DELIMITER).and.(op1 /= DELIMITER)) then
 	! Do nothing
-	op1_new = op1
-	op2_new = op2
+        op1_new = op1
+        op2_new = op2
       endif         
    endif
 
@@ -298,9 +300,11 @@ do l = 1, n_tot
     if (opstring_site(ir, counter(ir)) == CONST_OP) then ! constant operator
       opstring(ip)%i = ir
       opstring(ip)%j = ir
+      opstring(ip)%optype = CONSTANT
     elseif (opstring_site(ir, counter(ir)) == FLIP_OP ) then ! spin flip operator 
       opstring(ip)%i = ir
       opstring(ip)%j = 0
+      opstring(ip)%optype = SPIN_FLIP
     endif
 ! ignore Ising delimiters at each site ir
     counter(ir) = counter(ir) + 1
@@ -321,7 +325,7 @@ do ip = 1, config%LL
 enddo
 
 if (n_exp_new /= config%n_exp) then
-  print*, "subroutine local_offdiagonal_update: Caramba! n_exp_new = ", n_exp_new, "  n_exp = ", config%n_exp
+  print*, "subroutine local_offdiagonal_update: ERROR: n_exp_new = ", n_exp_new, "  n_exp = ", config%n_exp
   stop
 endif
 

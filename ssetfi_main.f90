@@ -61,7 +61,7 @@ subroutine one_MCS_plaquette(S, beta, Jij_sign, hz_fields_sign, TRANSLAT_INVAR, 
             leg_visited=leg_visited, config=config, &
             hz_fields=hz_fields, C_par_hyperparam=C_par_hyperparam )
 ! ! ! Local off-diagonal update is not working correctly.
-! ! !         call local_offdiagonal_update(spins=spins, opstring=opstring, config=config)
+        ! call local_offdiagonal_update(spins=spins, opstring=opstring, config=config)
     enddo
 
 end subroutine 

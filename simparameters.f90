@@ -35,7 +35,8 @@ end type
 
 
 ! *******************************************************************
-!  The same as above, CAREFUL !
+! The same as above, CAREFUL !
+! These variables are used in a NAMELIST statement. 
 ! *******************************************************************
 real(dp) :: J_1 = +1.0_dp    
 real(dp) :: hx = 0.60_dp       ! transverse field (in units of J_1)
