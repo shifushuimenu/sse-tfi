@@ -9,7 +9,8 @@ module SSE_configuration
     integer, parameter :: ISING_BOND = 10
     integer, parameter :: TWO_LEG = 20, SPIN_FLIP = 21, CONSTANT = 22, LONGITUDINAL = 23
     integer, parameter :: TRIANGULAR_PLAQUETTE = 30
-
+    ! used in the local off-diagonal update 
+    integer, parameter :: DELIMITER = -1, NOT_USED = 0
     ! used only in the diagonal update when choosing operator classes 
     ! to be inserted 
     integer, parameter :: TWOLEGCONST_OR_FOURLEG = 52
