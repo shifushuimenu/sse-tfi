@@ -29,12 +29,19 @@ real(dp), intent(in)                 :: C_par_hyperparam
 ! with the linearly stored site ir on which it acts. Ising delimiters are defined
 ! to sit at both positions ir=i1 and ir=i2. This information is needed to rebuild
 ! the operator string frmo the sub-strings. 
-type :: tIpSite
+type :: t_IpSite
   integer :: ip
   integer :: ir
-end type tIpSite
+end type t_IpSite
 
-type (tIpSite), allocatable :: ipsite(:)
+type (t_IpSite), allocatable :: ipsite(:)
+
+type t_weights
+  real(dp) :: weight_new 
+  real(dp) :: weight_old
+end type t_weights 
+
+type(t_weights), allocatable :: opsubstring_weights(:,:)
 
 integer, allocatable  :: opsubstring_site(:, :)	
 ! opsubstring_site(ir, :) contains for each site ir a sequence of 2-leg operators 
@@ -53,7 +60,8 @@ integer :: optype
 integer, allocatable :: n_opsubstring_site(:) ! number of elements in opsubstring_site(ir,:) (2-leg vertices and Ising delimiters)
 integer, allocatable :: counter(:) ! allows to jump over Ising operators in the operator 
 				   ! sequences on each site when rebuilding the operator string
-logical, allocatable :: ISING_LAST(:)   ! .TRUE. if last operator in the substring was an Ising delimiter
+logical, allocatable :: ISING_LAST(:)   ! .TRUE. if last operator in the substring was an Ising delimiter. ISING_LAST(ir) is only set 
+           ! to .FALSE. by detection of spin-flip or constant operators at site ir, but not by longitudinal field operators, which are simply ignored. 
 logical, allocatable :: TWOLEG_LAST(:)  ! .TRUE. if last operator in the substring was a constant or spin-flip operator 
 logical, allocatable :: LONGITUDINAL_LAST(:)   ! .TRUE. if last operator in the substring was a longitudinal operator  => combined weights 
 logical, allocatable :: touched(:)  ! touched(ir) indicates whether the spin ir has any operator acting on it 
@@ -72,15 +80,24 @@ integer :: ix, i3
 integer :: sites(1:3) ! a plaquette has three sites, a bond operator only two sites  
 
 integer :: alignment 
-real(dp) :: weight_new, weight_old 
+real(dp) :: weight_new, weight_old, prob
 real(dp) :: eta
 
 if( config%n2leg < 2 ) then 
     return 
 endif 
 
-allocate(opsubstring_site(config%n_sites,5*config%LL))  ! IMPROVE
+allocate(opsubstring_site(1:config%n_sites, 1:5*config%LL))  ! IMPROVE
+allocate(opsubstring_weights(0:config%n_sites, 0:5*config%LL))
 opsubstring_site(:,:) = NOT_USED ! initialize to invalid values 
+
+do ip=1,config%LL 
+  do ir=1,config%n_sites 
+    opsubstring_weights(ir, ip)%weight_new = -13 ! invalid value
+    opsubstring_weights(ir, ip)%weight_old = -13 
+  enddo 
+enddo
+
 allocate(n_opsubstring_site(config%n_sites)) ! Mustn't the length of opsubstring_site and ipsite be 2*LL ??????
 allocate(counter(config%n_sites))
 counter(:) = 0
@@ -94,7 +111,7 @@ allocate(ipsite(5*config%LL))
 allocate(touched(config%n_sites))
 touched(:) = .FALSE.
   
-n_tot = 0
+n_tot = 0 ! n_tot is used also as a counter 
 
 ! ****************************************************************
 ! 1. Compile the operator substrings for each site and mark 
@@ -112,8 +129,8 @@ do ip = 1, config%LL
         counter(i1) = counter(i1) + 1
         opsubstring_site(i1, counter(i1)) = CONSTANT
         ISING_LAST(i1) = .FALSE.
+        LONGITUDINAL_LAST(i1) = .FALSE.
         n_tot = n_tot + 1
-    ! Improve: confusingly n_tot is used as a counter here
         ipsite(n_tot)%ip = ip
         ipsite(n_tot)%ir = i1
       case(SPIN_FLIP)
@@ -121,6 +138,7 @@ do ip = 1, config%LL
         counter(i1) = counter(i1) + 1
         opsubstring_site(i1, counter(i1)) = SPIN_FLIP
         ISING_LAST(i1) = .FALSE.
+        LONGITUDINAL_LAST(i1) = .FALSE.
         n_tot = n_tot + 1
         ipsite(n_tot)%ip = ip
         ipsite(n_tot)%ir = i1
@@ -153,44 +171,54 @@ do ip = 1, config%LL
         enddo 
       
       case(LONGITUDINAL)
+        ! Do not reset ISING_LAST(i1).
+        if ( .not.ISING_LAST(i1) ) then  ! excludes DELIMITER
+          ! Store the weight changes due to longitudinal field operators between *unconstrained* 
+          ! spin-flip operators. Longitudinal field operators on constrained segments do not 
+          ! matter since no spin-flip will occur there, and so they are not recorded. The new/old
+          ! weights of consecutive longitudinal field operators are combined and the combined weights 
+          ! are stored. 
 
-        ! ! Store the weight changes due to longitudinal field operators between *unconstrained* 
-        ! ! spin-flip operators. Longitudinal field operators on constrained segments do not 
-        ! ! matter since noe spin-flip will occur there, and so they are not recorded. The new/old
-        ! ! weights of consecutive longitudinal field operators are combined and the combined weights 
-        ! ! are stored. 
-
-        ! if( .not.LONGITUDINAL_LAST(i1) ) then 
-        !   ! reset weights 
-        !   weight_new = 1.0_dp
-        !   weight_old = 1.0_dp
-        ! endif 
+          if( .not.LONGITUDINAL_LAST(i1) ) then ! could have been CONSTANT, SPIN_FLIP
+            ! reset weights 
+            weight_new = 1.0_dp
+            weight_old = 1.0_dp
+          endif 
+            
+          ! For longitudinal field (`hz`) operators, the structure component
+          ! opstring(ip)%k is used to store whether the hz operator 
+          ! is aligned with the spin it is sitting on or not. opstring(ip)%k = +1(-1) means
+          ! aligned (anti-aligned).
+          alignment = opstring(ip)%k
+          if (alignment > 0) then 
+              ! spin aligned with the field 
+              weight_new = weight_new * C_par_hyperparam
+              weight_old = weight_old * (TWO * abs(hz_fields(i1)) + C_par_hyperparam)
+          else
+              weight_old = weight_old * C_par_hyperparam
+              weight_new = weight_new * (TWO * abs(hz_fields(i1)) + C_par_hyperparam)
+          endif 
+          LONGITUDINAL_LAST(i1) = .TRUE.
           
-        ! ! For longitudinal field (`hz`) operators, the structure component
-        ! ! opstring(ip)%k is used to store whether the hz operator 
-        ! ! is aligned with the spin it is sitting on or not. opstring(ip)%k = +1(-1) means
-        ! ! aligned (anti-aligned).
-        ! alignment = opstring(ip)%k
-        ! if (alignment > 0) then 
-        !     ! spin aligned with the field 
-        !     weight_new = weight_new * C_par_hyperparam
-        !     weight_old = weight_old * (TWO * abs(hz_fields(i1)) + C_par_hyperparam)
-        ! else
-        !     weight_old = weight_old * C_par_hyperparam
-        !     weight_new = weight_new * (TWO * abs(hz_fields(i1)) + C_par_hyperparam)
-        ! endif 
+          ! opsubstring_weights(:,:) only has valid values at positions where a LONGITUDINAL_WEIGHT 
+          ! sits. Consecutive longitudinal weights are combined into one and their weights 
+          ! are combined. 
+          ! counter(i1) is the same as for the last non-LONGITUDINAL operator
+          opsubstring_weights(i1, counter(i1))%weight_new = weight_new
+          opsubstring_weights(i1, counter(i1))%weight_old = weight_old 
 
+          ! if( (opsubstring_site(i1, counter(i1)) /= SPIN_FLIP) .and. &
+          !     (opsubstring_site(i1, counter(i1)) /= CONSTANT) ) then 
+          !   print*, "Error:  opsubstring_weights"
+          !   stop
+          ! endif 
 
+          ! ! Convert (hz,aligned) into (hz,antialigned) vertex and vice versa.
+          ! ! Note: (hz,aligned) and (hz,antialigned) are two different vertices with 
+          ! !       different weights. 
+          ! opstring(ip)%k = -opstring(ip)%k
 
-        ! ! Convert (hz,aligned) into (hz,antialigned) vertex and vice versa.
-        ! ! Note: (hz,aligned) and (hz,antialigned) are two different vertices with 
-        ! !       different weights. 
-        ! opstring(ip)%k = -opstring(ip)%k
-
-
-
-
-
+        endif 
 
       case default
     !     print*, "jumping over identities"
@@ -233,44 +261,65 @@ do ir=1, config%n_sites
 
     op1 = opsubstring_site(ir, subip)
     op2 = opsubstring_site(ir, subip_next)
-    
+
     if (op1 == op2) then 
+
+       if( opsubstring_weights(ir, subip)%weight_new /= -13 ) then 
+          weight_new = opsubstring_weights(ir, subip)%weight_new
+          weight_old = opsubstring_weights(ir, subip)%weight_old
+          prob = weight_new / (weight_new + weight_old)
+       else 
+          prob = 0.5_dp
+       endif 
+       call random_number(eta)
+
 ! Two adjacent spin flip operators or two adjacent constants
 ! encountered => Perform update: (const)_p1,(const)_p2 <=> (spin flip)_p1,(spin flip)_p2
 ! and update the spin at site ir if WRAPPING = .TRUE.
 ! NOTE that - by construction - there should never be two delimiter operators on consecutive positions
+! and likewise by construction there should not be two longitudinal weight operators on consecutive positions. 
       if (op1 == CONSTANT) then
-	      op1_new = SPIN_FLIP
-	      op2_new = SPIN_FLIP
-        if (WRAPPING) then
-          spins(ir) = - spins(ir)
-        endif
+        if (eta < prob) then 
+          op1_new = SPIN_FLIP
+          op2_new = SPIN_FLIP
+          if (WRAPPING) then
+            spins(ir) = - spins(ir)
+          endif
+        else
+          op1_new = op1
+          op2_new = op2 
+        endif 
       elseif (op1 == SPIN_FLIP) then
-        op1_new = CONSTANT
-        op2_new = CONSTANT
-        if (WRAPPING) then
-          spins(ir) = - spins(ir)
-        endif
+        if (eta < prob) then 
+          op1_new = CONSTANT
+          op2_new = CONSTANT
+          if (WRAPPING) then
+            spins(ir) = - spins(ir)
+          endif
+        else
+          op1_new = op1
+          op2_new = op2 
+        endif 
       else
 !!!!!?????? Two Ising delimiters in a row across the boundary in imaginary time => don't exit ?????
-        if ( .not.(subip == n_opsubstring_site(ir))) then 
+        if ( .not.(subip == n_opsubstring_site(ir)) ) then 
           print*, "Error: Two strange operators in a row opsubstring_site(ir,:) ", "ir =", ir
           print*, "ir=", ir, " subip=", subip, " op(subip)=", op1, " op(subip+1)=", op2
           print*, "Here is the operator substring on site ir=", ir
           do ii=1, n_opsubstring_site(ir)
               print*, ii, opsubstring_site(ir, ii)
           enddo 
-!           print*, "And here is the full operator string filtered to show only Ising operators"
-!           do ip = 1, config%LL
-!               if (opstring(ip)%optype == ISING_BOND) then 
-!                   i1 = opstring(ip)%i
-!                   i2 = opstring(ip)%j
-!                   print*, "i1, i2=", i1, i2
-!                   if ((i1 == 0) .or. (i2 == 0)) then 
-!                       stop 
-!                   endif 
-!               endif 
-!           enddo
+          ! print*, "And here is the full operator string filtered to show only Ising operators"
+          ! do ip = 1, config%LL
+          !     if (opstring(ip)%optype == ISING_BOND) then 
+          !         i1 = opstring(ip)%i
+          !         i2 = opstring(ip)%j
+          !         print*, "i1, i2=", i1, i2
+          !         if ((i1 == 0) .or. (i2 == 0)) then 
+          !             stop 
+          !         endif 
+          !     endif 
+          ! enddo
 	        stop
         endif
 ! Do nothing, i.e. keep the adjacent Ising delimiters 
@@ -284,20 +333,39 @@ do ir=1, config%n_sites
 ! among them, permute the operators.
 ! If one of the operators is a delimiter, no update procedure can be performed.
 
+    if( opsubstring_weights(ir, subip)%weight_new /= -13 ) then 
+      weight_new = opsubstring_weights(ir, subip)%weight_new
+      weight_old = opsubstring_weights(ir, subip)%weight_old
+      prob = weight_new / (weight_new + weight_old)
+    else 
+      prob = 0.5_dp
+    endif 
+    call random_number(eta)
+
 ! When swapping operators that are connected through the boundary in imaginary time,
 ! the initial spin configuration has to be updated. Only the (unconstrained) spin sequence between
 ! those two operators accross imaginary time is affected by this update.
       if ((op1 == CONSTANT).and.(op2 == SPIN_FLIP)) then
-        op1_new = SPIN_FLIP
-        op2_new = CONSTANT
-        if (WRAPPING) then
-          spins(ir) = - spins(ir)
+        if (eta < prob) then 
+          op1_new = SPIN_FLIP
+          op2_new = CONSTANT
+          if (WRAPPING) then
+            spins(ir) = - spins(ir)
+          endif
+        else
+          op1_new = op1
+          op2_new = op2 
         endif
       elseif ((op1 == SPIN_FLIP).and.(op2 == CONSTANT)) then
-        op1_new = CONSTANT
-        op2_new = SPIN_FLIP
-        if (WRAPPING) then
-          spins(ir) = - spins(ir)
+        if (eta < prob) then 
+          op1_new = CONSTANT
+          op2_new = SPIN_FLIP
+          if (WRAPPING) then
+            spins(ir) = - spins(ir)
+          endif
+        else
+          op1_new = op1
+          op2_new = op2 
         endif
       elseif ((op1 == DELIMITER).and.(op2 /= DELIMITER)) then
 	! Do nothing
@@ -320,7 +388,7 @@ do ir=1, config%n_sites
   if ( .not.(subip == n_opsubstring_site(ir)) ) then
   if ((op1 == DELIMITER).and.(op2 == DELIMITER)) then
     print*, "Error: Two delimiter operators in a row"
-    stop
+    !stop
   endif
   endif
 
