@@ -7,6 +7,7 @@ module ssetfi_globals
     integer, allocatable  :: sublattice(:)
     integer, allocatable  :: neigh(:,:)
     
+    ! for lattice with triangular plaquettes 
     type(t_Plaquette), allocatable :: plaquettes(:)
     
     real(dp), allocatable :: J_interaction_matrix(:,:)

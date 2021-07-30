@@ -4,7 +4,8 @@
 module measurements
     use types 
     use SSE_configuration 
-    use lattice, only: Struct, t_Kgrid, momentum_grid_triangular_Bravais
+    use lattice, only: Struct, t_Kgrid, momentum_grid_triangular_Bravais, &
+                       momentum_grid_chain
     use tau_embedding
     use simparameters
     implicit none 
@@ -127,8 +128,11 @@ module measurements
 
     P0%Nscalar_prop = P0_N
     
-    ! heavy use
-    call momentum_grid_triangular_Bravais(S=S, Kgrid=Kgrid)
+    if(( Sim%lattice_type .eq. "triangular" ).or.( Sim%lattice_type .eq. "kagome" )) then 
+        call momentum_grid_triangular_Bravais(S=S, Kgrid=Kgrid)
+    elseif( Sim%lattice_type .eq. "chain") then 
+        call momentum_grid_chain(S=S, Kgrid=Kgrid)
+    endif 
 
     call init_MatsuGrid(beta=Sim%beta, MatsuGrid=MatsuGrid)
     P0%Nq = Kgrid%Nq
@@ -192,6 +196,7 @@ module measurements
     ! Average scalar and array-like quantities
     P0%meas(:, idx) = P0%meas(:, idx) * factor 
     P0%AzBzq_Matsu(:, idx) = P0%AzBzq_Matsu(:, idx) * factor
+    P0%Szq(:, idx) = P0%Szq(:, idx) * factor
 
     ! Compute fluctuation-dissipation quantity per bin
     P0%meas(P0_SPECIFIC_HEAT, idx) = ( P0%meas(P0_AV_NEXP2, idx) - P0%meas(P0_AV_NEXP, idx)**2 &
@@ -332,11 +337,20 @@ module measurements
         integer :: spins_tmp(config%N_sites)
         integer :: l_nochange 
         real(dp) :: factor 
+
+        ! for calculating static structure factor 
+        real(dp), allocatable :: CC(:), SS(:), Szq_tmp(:), Szq(:)
+
         ! temporary help variable => REMOVE later 
         complex(dp), allocatable  :: AzBzq_temp(:,:)
         if (.not.allocated(AzBzq_temp)) allocate( AzBzq_temp(MatsuGrid%N_Matsubara, Kgrid%Nq) ) 
 
+
         ! ... Executable ...
+        if(.not.allocated(CC))   allocate(CC(Kgrid%nq))
+        if(.not.allocated(SS))   allocate(SS(Kgrid%nq))
+        if(.not.allocated(Szq_tmp)) allocate(Szq_tmp(Kgrid%nq))
+        if(.not.allocated(Szq))  allocate(Szq(Kgrid%nq))
 
         idx = P0%idx
         tmp_idx = P0%avg    ! use the bin which is designed for averages as a temporary storage
@@ -358,6 +372,9 @@ module measurements
         magnz2 = 0.0_dp
         COparam = 0.0_dp
         n2leg_hx = 0
+
+        Szq(:) = 0.0_dp
+
         do ip = 1, LL
 
             l_nochange = l_nochange + 1
@@ -371,40 +388,53 @@ module measurements
                 ! stays constant (=l_nochange) and weight the spin config before the next 
                 ! spin flip operator by that fraction of LL.  
                 n2leg_hx = n2leg_hx +1 
-                magnz_tmp = sum(spins_tmp(:)) / float(Nsites)                
+                magnz_tmp = sum(spins_tmp(:)) / float(config%n_sites)                
                 magnz = magnz + magnz_tmp * l_nochange * factor 
                 magnz2 = magnz2 + magnz_tmp**2 * l_nochange * factor 
                 COparam_ = complex(0.0_dp, 0.0_dp)
-                do ir = 1, Nsites 
-                    COparam_ = COparam_ + spins_tmp(ir)*COphase(sublattice(ir))
-                enddo 
+                if( Sim%lattice_type .ne. "chain" ) then 
+                    do ir = 1, Nsites 
+                        COparam_ = COparam_ + spins_tmp(ir)*COphase(sublattice(ir))
+                    enddo 
+                endif 
                 COparam = COparam + abs(COparam_) * l_nochange * factor 
+
+                ! Static structure factor 
+                call calc_static_Szq(S, Kgrid, spins_tmp, Szq_tmp)
+                Szq(:) = Szq(:) + Szq_tmp(:) * l_nochange * factor 
+
                 spins_tmp(i1) = -spins_tmp(i1)
                 ! reset 
                 l_nochange = 0
             endif
 
         enddo 
+
         ! Take care of the segment of propagation steps from the last spin 
         ! flip operator up to ip=LL.
-
-        magnx = n2leg_hx / (Sim%beta * config%n_sites * Sim%hx)
-        magnz_tmp = sum(spins_tmp(:)) / float(Nsites)
+        magnz_tmp = sum(spins_tmp(:)) / float(config%n_sites)
         magnz = magnz + magnz_tmp * l_nochange * factor 
         magnz2 = magnz2 + magnz_tmp**2 * l_nochange * factor 
         COparam_ = complex(0.0_dp, 0.0_dp)
-        do ir = 1, Nsites 
-            COparam_ = COparam_ + spins_tmp(ir)*COphase(sublattice(ir))
-        enddo 
+        if( Sim%lattice_type .ne. "chain" ) then         
+            do ir = 1, Nsites 
+                COparam_ = COparam_ + spins_tmp(ir)*COphase(sublattice(ir))
+            enddo 
+        endif 
         COparam = COparam + abs(COparam_) * l_nochange * factor 
 
-        COparam = COparam * 3.0_dp / float(Nsites)
+        COparam = COparam * 3.0_dp / float(config%n_sites)
+
+        ! Static structure factor 
+        call calc_static_Szq(S, Kgrid, spins_tmp, Szq_tmp)        
+        Szq(:) = Szq(:) + Szq_tmp(:) * l_nochange * factor 
 
         P0%meas(P0_ENERGY, tmp_idx) = energy
-        P0%meas(P0_MAGNETIZATION, tmp_idx) = magnz ! magnz2
+        P0%meas(P0_MAGNETIZATION, tmp_idx) = magnz2 ! magnz
         P0%meas(P0_COPARAM, tmp_idx) = COparam
         P0%meas(P0_AV_NEXP, tmp_idx) = config%n_exp
         P0%meas(P0_AV_NEXP2, tmp_idx) = config%n_exp**2
+        magnx = n2leg_hx / (Sim%beta * config%n_sites * Sim%hx)
         P0%meas(P0_XMAGNETIZATION, tmp_idx) = magnx
         ! fluctuation-dissipation quantities are only defined *over* a bin,
         ! not in a single configuration 
@@ -414,10 +444,12 @@ module measurements
         P0%meas(:, idx) = P0%meas(:, idx) + P0%meas(:, tmp_idx)
         P0%meas(:, P0%ac_time) = P0%meas(:, P0%ac_time) + P0%meas(:, tmp_idx)**2
 
-        open(100, file='TS.dat', position='append', status='unknown')
-        write(100, *) energy, magnz, magnz2, spins2binrep(spins), COparam, config%n2leg_hz, &
-            config%n2leg, config%n4leg, config%n_exp
-        close(100)   
+        P0%Szq(:, idx) = P0%Szq(:, idx) + Szq(:)
+
+        ! open(100, file='TS.dat', position='append', status='unknown')
+        ! write(100, *) energy, magnz, magnz2, spins2binrep(spins), COparam, config%n2leg_hz, &
+        !     config%n2leg, config%n4leg, config%n_exp
+        ! close(100)   
 
         if( heavy_use ) then 
             call measure_SzSzTimeCorr(Matsu=MatsuGrid, Kgrid=Kgrid, config=config, S=S, &
@@ -463,6 +495,24 @@ module measurements
         write(500, *) Sim%hx, Sim%temp, Sim%hz,  &
             ( P0%meas(obs, P0%avg), P0%meas(obs, P0%err), P0%meas(obs, P0%ac_time), obs = 1, P0%Nscalar_prop )
         close(500)
+
+        open(600, file='Szq'//chr_rank//'.dat', position='rewind', status='unknown')        
+        select case( trim(lattice_type) ) 
+            case("chain")
+            do q = 1, Kgrid%nq
+                write(600, *) Kgrid%listk(1,q)*S%b1_p, P0%Szq(q, P0%avg), P0%Szq(q, P0%err), P0%Szq(q, P0%ac_time)
+            enddo 
+            case("triangular")
+            do q = 1, Kgrid%nq
+                qvec = Kgrid%listk(1,q)*S%b1_p + Kgrid%listk(2,q)*S%b2_p
+                write(600, *) qvec, P0%Szq(q, P0%avg), P0%Szq(q, P0%err), P0%Szq(q, P0%ac_time)
+            enddo
+            case("kagome")
+                print*, "not implemented yet"
+            case default 
+        end select
+        close(600)
+
 
         if( Sim%heavy_use ) then 
             ! Write out average of imaginary time correlation function 
@@ -513,5 +563,67 @@ module measurements
         endif 
 
     end subroutine     
+
+
+    subroutine calc_static_Szq(S, Kgrid, spins, Szq)
+        use lattice 
+        use util, only: assert
+        implicit none 
+    
+        type(Struct), intent(in) :: S 
+        type(t_Kgrid), intent(in) :: Kgrid 
+        integer, intent(in) :: spins(:)  ! instantaneous spin configuration at a given propagation step
+        real(dp), intent(out) :: Szq(:)
+    
+    ! ... Local variables ...
+        integer :: nq, n 
+        integer :: ir, q 
+        real(dp) :: CC(Kgrid%nq), SS(Kgrid%nq)
+    
+        call assert(size(Szq)==Kgrid%nq, "Error: size(Szq) /= Kgrid%nq")
+        nq = Kgrid%nq
+        n = S%nsites 
+    ! trim(S%lattice_type) == "chain" ) then 
+        select case(trim(S%lattice_type))
+            case("chain")
+                ! better do FFT, which would depend on the lattice type
+                SS(:) = 0.0_dp
+                CC(:) = 0.0_dp
+                do q=1,Nq
+                    do ir=1,n 
+                        CC(q) = CC(q) + Kgrid%cosqr(ir,q)*spins(ir)
+                        SS(q) = SS(q) + Kgrid%sinqr(ir,q)*spins(ir)
+                    enddo 
+                enddo 
+                Szq(:) = (CC(:)**2 + SS(:)**2) / n**2
+            case("triangular")
+                ! better do FFT, which would depend on the lattice type
+                SS(:) = 0.0_dp
+                CC(:) = 0.0_dp
+                do q=1,Nq
+                    do ir=1,n 
+                        CC(q) = CC(q) + Kgrid%cosqr(ir,q)*spins(ir)
+                        SS(q) = SS(q) + Kgrid%sinqr(ir,q)*spins(ir)
+                    enddo 
+                enddo 
+                Szq(:) = (CC(:)**2 + SS(:)**2) / n**2            
+            case("kagome")
+                ! better do FFT, which would depend on the lattice type
+                SS(:) = 0.0_dp
+                CC(:) = 0.0_dp
+                do q=1,Nq
+                    do ir=1,n 
+                        CC(q) = CC(q) + Kgrid%cosqr(ir,q)*spins(ir)
+                        SS(q) = SS(q) + Kgrid%sinqr(ir,q)*spins(ir)
+                    enddo 
+                enddo 
+                Szq(:) = (CC(:)**2 + SS(:)**2) / n**2
+            case default 
+                print*, "Unkown lattice type:", trim(S%lattice_type)
+                stop
+        end select 
+    
+    end subroutine calc_static_Szq
+
 
 end module 

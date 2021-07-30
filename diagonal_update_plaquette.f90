@@ -685,6 +685,10 @@ elseif (trim(S%lattice_type) == "kagome") then
     ! Kagome lattice 
     probtable%consts_added_per_opclass(2) = 3.0_dp * abs(J_1) * n_plaquettes
     probtable%sum_all_diagmatrix_elements_peropclass(2) = 4.0_dp * abs(J_1) * n_plaquettes
+elseif (trim(S%lattice_type) == "chain") then    
+    ! No plaquettes at all. 
+    probtable%consts_added_per_opclass(2) = 0.0_dp
+    probtable%sum_all_diagmatrix_elements_peropclass(2) = 0.0_dp
 else
     stop "init_probtables(): Unknown lattice type."
 endif 

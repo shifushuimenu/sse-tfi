@@ -63,7 +63,55 @@ FUNCTION compare(p1, p2) RESULT(b)
     ENDDO
 END FUNCTION      
 
-   
+
+subroutine init_lattice_chain( &
+            nsites, &
+            S, neigh )
+
+implicit none 
+
+integer, intent(in) :: nsites
+type(Struct), intent(out) :: S
+integer, allocatable, intent(out) :: neigh(:,:)
+
+! ... Local variables ...
+integer :: ir 
+
+S%lattice_type = "chain"
+S%rdim = 1
+S%coord = 2
+S%nsites = nsites
+S%nx_bravais = nsites
+S%ny_bravais = 1
+S%nbravais_sites = nsites
+S%nbasis = 1
+
+allocate(S%a1_p(1:S%rdim))
+allocate(S%b1_p(1:S%rdim))
+
+S%a1_p(1) = 1.0_dp
+S%b1_p(1) = 2.0_dp * PI / S%nx_bravais
+
+
+if (.not.allocated(neigh)) allocate(neigh(0:S%coord, 1:S%Nsites))
+
+do ir = 1, S%nsites
+  neigh(0,ir) = ir
+  if (ir == S%nsites) then 
+    neigh(1,ir) = 1
+  else 
+    neigh(1,ir) = ir+1
+  endif 
+  if (ir == 1) then 
+    neigh(2,ir) = S%nsites 
+  else 
+    neigh(2,ir) = ir-1
+  endif 
+enddo
+
+end subroutine 
+
+
 SUBROUTINE init_lattice_triangular( &
             nx, ny, &
             S, neigh, sublattice, & 
@@ -86,7 +134,7 @@ SUBROUTINE init_lattice_triangular( &
 ! Output:
 ! -------
 !    S: type(Struct), lattice structure object 
-!    neigh(0:6, 1:nx*ny): lineraly stored indices of the 
+!    neigh(0:6, 1:nx*ny): linearly stored indices of the 
 !       nearest neighbours of a given site index
 !    sublattice(1:nx*ny) \\in [1,2,3]: sublattice index of a 
 !       linearly stored site index 
@@ -141,8 +189,8 @@ SUBROUTINE init_lattice_triangular( &
   
  ! Reciprocal lattice of the Bravais lattice is also triangular.                    
  ! delta_k in direction of the unit vectors of the reciprocal lattice
- S%b1_p(1) = 1.d0*PI; S%b1_p(2) = -1.d0*PI / sqrt(3.d0)
- S%b2_p(1) = 0.0;     S%b2_p(2) = 2.d0*PI / sqrt(3.d0)
+ S%b1_p(1) = 1.d0*PI / S%Nx_bravais; S%b1_p(2) = -1.d0*PI / sqrt(3.d0) / S%Nx_bravais
+ S%b2_p(1) = 0.0;                    S%b2_p(2) = 2.d0*PI / sqrt(3.d0)  / S%Ny_bravais
 
  ! Basis is just one site for triangular lattice 
  S%r_p(1,:) = 0.d0
@@ -1034,6 +1082,62 @@ subroutine momentum_grid_triangular_Bravais(S, Kgrid)
   enddo
   
 end subroutine momentum_grid_triangular_Bravais
+
+
+subroutine momentum_grid_chain(S, Kgrid)
+
+  implicit none 
+
+  type(Struct), intent(in) :: S
+  type(t_Kgrid), intent(out) :: Kgrid
+
+  ! ... Local variables ...
+  integer :: Nq
+  integer :: ik, i
+  integer :: iq, ir
+  real(dp) :: qvec(1:S%rdim), ri(1:S%rdim)
+
+  integer :: ix, irB
+  integer :: listB(1,0:S%Nbravais_sites-1)
+
+  ! Here, we could select to compute just some high-symmetry momentum points.
+  Nq = S%Nbravais_sites
+  Kgrid%Nq = Nq
+
+  if (.not.allocated(Kgrid%listk) ) allocate( Kgrid%listk(1:S%rdim, 1:Nq) )
+  if (.not.allocated(Kgrid%cosqr) ) allocate( Kgrid%cosqr(1:S%Nsites, 1:Nq) )
+  if (.not.allocated(Kgrid%sinqr) ) allocate( Kgrid%sinqr(1:S%Nsites, 1:Nq) )
+
+  ! listk: grid coordinates of points in reciprocal space 
+  ik = 0 
+  do i = 0, S%Nx_bravais-1 
+      ik = ik+1
+      Kgrid%listk(1,ik) = i-S%Nx_bravais/2
+  end do
+  if( ik /= Nq ) then
+      stop " Error: nk /= Nq"
+  end if
+
+  ! IMPROVE: listB(:,:) appears also as local variable in the subroutine 
+  ! init_lattice_kagome. THIS CAN BE A SOURCE OF INCONSISTENCY !
+  do ix=0,S%Nx_bravais-1
+    irB = ix
+    listB(1,irB) = ix
+  enddo
+
+  ! Matrix elements of Fourier transform
+  do iq = 1, Nq
+    qvec = Kgrid%listk(1,iq)*S%b1_p
+    do irB = 0, S%Nbravais_sites-1 ! sum over all sites: Bravais lattice ... 
+        ri = listB(1,irB)*S%a1_p
+        ir = irB + 1
+        Kgrid%sinqr(ir, iq) = sin( qvec(1)*ri(1) ) 
+        Kgrid%cosqr(ir, iq) = cos( qvec(1)*ri(1) ) 
+    enddo
+  enddo
+
+end subroutine momentum_grid_chain
+
 
 end module lattice 
 

@@ -248,12 +248,16 @@ program ssetfi
         stop
     endif 
 
-    if (trim(lattice_type) == "triangular") then         
+    if (trim(Sim%lattice_type) == "triangular") then         
         call init_lattice_triangular(nx=nx, ny=ny, &
             S=S, neigh=neigh, sublattice=sublattice, plaquettes=plaquettes) 
-    elseif (trim(lattice_type) == "kagome") then 
+    elseif (trim(Sim%lattice_type) == "kagome") then 
         call init_lattice_kagome(nx=nx, ny=ny, &
             S=S, neigh=neigh, sublattice=sublattice, plaquettes=plaquettes) 
+    elseif (trim(Sim%lattice_type) == "chain") then 
+        call init_lattice_chain(nsites=Sim%n_sites, S=S, neigh=neigh)    
+        ! We need a dummy for plaquettes array so that the code does not crash    
+        allocate(plaquettes(0))
     else 
         print*, "Error: unknown lattice type"
         stop
@@ -268,10 +272,30 @@ program ssetfi
 
     ! Specify interactions beyond nearest neighbours 
     ! Nearest neighbour interactions are already taken care 
-    ! of by the plaquette operators. 
+    ! of by the plaquette operators (for triangular lattice)
     allocate( J_interaction_matrix(S%Nsites,S%Nsites) )
     if(ignore_Jmatrix) then 
         J_interaction_matrix(:,:) = ZERO
+
+        if (trim(Sim%lattice_type) == "chain") then 
+            do ir = 1, S%nsites
+                do jr = 1, S%nsites
+                    if (ir /= jr) then 
+                        ! Rydberg interaction 1/r^6
+                        J_interaction_matrix(ir, jr) = + 1.0_dp / (abs(ir -jr)**6) + 1.0_dp / ((S%nsites - abs(ir- jr))**6)
+                    endif 
+                enddo         
+            enddo   
+            if (MPI_rank == root_rank) then 
+                ! Output Jmatrix as input for exact diagonalization code 
+                open(101, file="Jmatrix_Rydberg.txt", status="unknown", action="write")
+                do ir = 1, n_sites
+                    write(101, *) ( J_interaction_matrix(ir, jr), jr = 1, n_sites )
+                enddo 
+                close(101)
+            endif 
+        endif 
+
     else
         if (MPI_rank == root_rank) then 
             open(100, file=trim(Jmatrix_file), action="read", status="old")
@@ -288,72 +312,61 @@ program ssetfi
             MPI_DOUBLE, root_rank, MPI_COMM_WORLD, ierr )
 #endif             
     endif 
-    ! J_interaction_matrix(:,:) = 0.0_dp
+
+    ! ! Output the interaction matrix, which is the combination of the 
+    ! ! input interaction matrix and the nearest neighbour interactions `J_1`.
+    ! allocate( J_matrix_out(S%Nsites,S%Nsites) )   
+    ! ! ! REMOVE
+    ! ! Interaction matrix with FM next-nearest neighbour interactions
+    ! J_matrix_out(:,:) = 0.0_dp
+    ! do ir = 1, S%Nsites
+    !     do jr = 1, S%Nsites
+    !         do k = 1, S%coord ! S%coord + 1, 2*S%coords  => next-nearest neighbours 
+    !             if (neigh(k, ir) == jr) then ! nearest neighbours 
+    !               J_matrix_out(ir, jr) = -1.0_dp !-0.1_dp
+    !             endif 
+    !         enddo
+    !     enddo         
+    ! enddo       
+    ! open(101, file="Jmatrix_nnAFM.txt", status="unknown", action="write")
+    ! do ir = 1, n_sites
+    !     write(101, *) ( J_matrix_out(ir, jr), jr = 1, n_sites )
+    ! enddo 
+    ! close(101)
+    ! J_matrix_out(:,:) = 0.0_dp
+    ! ! REMOVE
+
+    ! J_matrix_out(:,:) = J_interaction_matrix(:,:)
     ! do ir = 1, S%Nsites
     !     do jr = 1, S%Nsites
     !         do k = 1, S%coord
     !             if (neigh(k, ir) == jr) then 
-    !               ! nearest neighbour interactions are already taken 
-    !               ! care of by the plaquette operators 
-    !               J_interaction_matrix(ir, jr) = -0.0_dp
+    !               ! Nearest neighbour interactions are already taken 
+    !               ! care of by the plaquette operators. Include them 
+    !               ! here so that J_matrix_out(:,:) can be used as input 
+    !               ! for exact diagonalization.
+    !               J_matrix_out(ir, jr) = J_1 + J_interaction_matrix(ir, jr)
     !             endif 
     !         enddo
     !     enddo         
     ! enddo   
-
-    ! Output the interaction matrix, which is the combination of the 
-    ! input interaction matrix and the nearest neighbour interactions `J_1`.
-    allocate( J_matrix_out(S%Nsites,S%Nsites) )   
-
+    ! if( MPI_rank == root_rank) then 
+    !     print*, "writing Jmatrix.dat"
+    !     open(100, file="Jmatrix.dat", status="unknown", action="write")
+    !     do ir = 1, S%Nsites
+    !         write(100, *) ( J_matrix_out(ir, jr), jr = 1, S%Nsites )
+    !     enddo 
+    !     close(100)
+    !     deallocate( J_matrix_out )
+    !     if( .not. (trim(Sim%lattice_type) == "chain") ) then 
+    !         open(201, file="sublattice.dat", status="unknown", action="write")
+    !         do ir = 1, S%Nsites 
+    !             write(201, *) ir, sublattice(ir)
+    !         enddo 
+    !         close(201)
+    !     endif 
+    ! endif 
     ! ! REMOVE
-    ! Interaction matrix with FM next-nearest neighbour interactions
-    J_matrix_out(:,:) = 0.0_dp
-    do ir = 1, S%Nsites
-        do jr = 1, S%Nsites
-            do k = 1, S%coord ! S%coord + 1, 2*S%coords  => next-nearest neighbours 
-                if (neigh(k, ir) == jr) then ! nearest neighbours 
-                  J_matrix_out(ir, jr) = -1.0_dp !-0.1_dp
-                endif 
-            enddo
-        enddo         
-    enddo       
-    open(101, file="Jmatrix_nnAFM.txt", status="unknown", action="write")
-    do ir = 1, n_sites
-        write(101, *) ( J_matrix_out(ir, jr), jr = 1, n_sites )
-    enddo 
-    close(101)
-    J_matrix_out(:,:) = 0.0_dp
-    ! REMOVE
-
-    J_matrix_out(:,:) = J_interaction_matrix(:,:)
-    do ir = 1, S%Nsites
-        do jr = 1, S%Nsites
-            do k = 1, S%coord
-                if (neigh(k, ir) == jr) then 
-                  ! Nearest neighbour interactions are already taken 
-                  ! care of by the plaquette operators. Include them 
-                  ! here so that J_matrix_out(:,:) can be used as input 
-                  ! for exact diagonalization.
-                  J_matrix_out(ir, jr) = J_1 + J_interaction_matrix(ir, jr)
-                endif 
-            enddo
-        enddo         
-    enddo   
-    if( MPI_rank == root_rank) then 
-        print*, "writing Jmatrix.dat"
-        open(100, file="Jmatrix.dat", status="unknown", action="write")
-        do ir = 1, S%Nsites
-            write(100, *) ( J_matrix_out(ir, jr), jr = 1, S%Nsites )
-        enddo 
-        close(100)
-        deallocate( J_matrix_out )
-        open(201, file="sublattice.dat", status="unknown", action="write")
-        do ir = 1, n_sites 
-            write(201, *) ir, sublattice(ir)
-        enddo 
-        close(201)
-    endif 
-    ! REMOVE
 
     if (translat_invar) then 
         call make_translat_invar( S, J_interaction_matrix, J_translat_invar )
@@ -415,7 +428,7 @@ program ssetfi
     ! will be sampled. 
         call init_probtables( S=S, J_interaction_matrix=J_interaction_matrix, &
         hx=hx, probtable=probtable, J_1=J_1, &
-        n_plaquettes=size(plaquettes,dim=1), TRANSLAT_INV=translat_invar, &
+        n_plaquettes=config%n_plaquettes, TRANSLAT_INV=translat_invar, &
         hz_fields=hz_fields, C_par_hyperparam=C_par_hyperparam, spins=spins)
     ! J_interaction_matrix is not needed anymore.
     if( allocated(J_interaction_matrix) ) deallocate( J_interaction_matrix )
