@@ -620,7 +620,8 @@ end function pbc
 subroutine init_lattice_kagome( &          
     nx, ny, &
     S, neigh, sublattice, & 
-    plaquettes )  
+    plaquettes, &
+    rvec )  
 ! Kagome lattice with nearest neighbour interactions and periodic boundary conditions. 
 ! Nx_brav and Ny_brav are the dimensions of the triangular Bravais lattice
 ! so that N_unit_cells = Nx_brav * Ny_brav is the number of unit cells. 
@@ -634,6 +635,7 @@ type(Struct), intent(out) :: S
 integer, allocatable, intent(out) :: neigh(:,:)
 integer, allocatable, intent(out) :: sublattice(:)
 type(t_Plaquette), allocatable, intent(out) :: plaquettes(:)
+real(dp), allocatable, intent(out) :: rvec(:,:)
 
 ! ... Local variables ...
 integer :: ir,jr,ix,iy,imj,sub
@@ -649,7 +651,6 @@ double precision ::  qvec(1:rdim), ri(1:rdim)
 
 integer :: plaq_idx, ir1, ir2, ir3
 
-double precision, allocatable :: rvec(:,:)
 double precision, allocatable :: local_quant_axis(:,:)
 
 ! CLEAN UP !
@@ -754,8 +755,8 @@ enddo
  S%r_p(3,:) = 0.5d0 * S%a2_p(:)
  
  ! real space position of the sites 
- allocate(rvec(rdim,S%Nsites))
- allocate(local_quant_axis(rdim,S%Nsites))
+ allocate(rvec(1:S%rdim,1:S%Nsites))
+ allocate(local_quant_axis(1:S%rdim,1:S%Nsites))
  do ir = 1, S%Nsites
      sub = mod(ir-1,3) + 1
      ! map site index to index in the Bravais lattice 
@@ -960,7 +961,7 @@ function translate_to_origin(S, i, j) result(r)
   jxB = mod(jB, S%Nx_bravais)
   jyB = jB / S%Nx_bravais
 
-! Bravais distance ( linearly stored index )
+! Bravais distance ( What is the linearly stored index of the lattice site with the same distance from the origin ?)
   r(1) = pbc(jxB-ixB, S%Nx_bravais) + pbc(jyB-iyB, S%Nx_bravais) * S%Nx_Bravais
 ! sublattice "distance" ( for a Bravais lattice, r(2) = 1 )
   r(2) = sublattice_distance(S, i, j)
@@ -1074,7 +1075,7 @@ subroutine momentum_grid_triangular_Bravais(S, Kgrid)
     do irB = 0, S%Nbravais_sites-1 ! sum over all sites: Bravais lattice ... 
       do sub=1,S%Nbasis,1   ! ... and basis
         ri = listB(1,irB)*S%a1_p + listB(2,irB)*S%a2_p + S%r_p(sub,:)
-        ir = irB*S%Nbasis + sub  ! IMPROVE: This is only valid for my number inf scheme of the kagome lattice ! MAKE THIS MORE STABLE !
+        ir = irB*S%Nbasis + sub  ! IMPROVE: This is only valid for my numbering scheme of the kagome lattice ! MAKE THIS MORE STABLE !
         Kgrid%sinqr(ir, iq) = sin( qvec(1)*ri(1) + qvec(2)*ri(2) )
         Kgrid%cosqr(ir, iq) = cos( qvec(1)*ri(1) + qvec(2)*ri(2) )
       enddo 

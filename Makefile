@@ -20,6 +20,7 @@ ssetfi_objects =  class_Stack.o \
 		  quicksort.o tau_embedding.o \
 		  simparameters.o \
 		  measurements.o \
+		  Rydberg_interactions.o
 	  
 	
 objects = ${modules} ${ssetfi_objects}	  

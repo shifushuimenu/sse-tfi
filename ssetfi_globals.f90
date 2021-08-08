@@ -6,6 +6,7 @@ module ssetfi_globals
     
     integer, allocatable  :: sublattice(:)
     integer, allocatable  :: neigh(:,:)
+    real(dp), allocatable :: rvec(:,:)   ! rvec(1:rdim, 1:nsites), real space positions 
     
     ! for lattice with triangular plaquettes 
     type(t_Plaquette), allocatable :: plaquettes(:)
@@ -29,6 +30,7 @@ module ssetfi_globals
     
         if( allocated(sublattice) ) deallocate(sublattice)
         if( allocated(neigh) ) deallocate(neigh)
+        if( allocated(rvec) ) deallocate(rvec) 
         if( allocated(plaquettes) ) deallocate(plaquettes)
         if( allocated(J_interaction_matrix) ) deallocate(J_interaction_matrix)
         if( allocated(Jij_sign) ) deallocate(Jij_sign)

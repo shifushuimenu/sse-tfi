@@ -133,6 +133,7 @@ program ssetfi
     use MPI_parallel
     use util
     use tau_embedding 
+    use Rydberg
     implicit none 
 
 
@@ -159,7 +160,7 @@ program ssetfi
     NAMELIST /SIMPARAMS/ J_1, hx, temp, nx, ny, n_sites, nmeas_step, ntherm_step, Nbin, &
         lattice_type, ignore_Jmatrix, Jmatrix_file, translat_invar, paramscan, &
         scan_min, scan_max, heavy_use, deterministic, &
-        hz, hz_fields_file, ignore_hz_fields, C_par_hyperparam
+        hz, hz_fields_file, ignore_hz_fields, Rb, C_par_hyperparam
 
 #if defined (USE_MPI)
     include "mpif.h"
@@ -236,6 +237,7 @@ program ssetfi
     Sim%hz=hz
     Sim%hz_fields_file=hz_fields_file
     Sim%ignore_hz_fields=ignore_hz_fields
+    Sim%Rb=Rb
     Sim%C_par_hyperparam=C_par_hyperparam
 
     if (nmeas_step < Nbin) then 
@@ -253,7 +255,8 @@ program ssetfi
             S=S, neigh=neigh, sublattice=sublattice, plaquettes=plaquettes) 
     elseif (trim(Sim%lattice_type) == "kagome") then 
         call init_lattice_kagome(nx=nx, ny=ny, &
-            S=S, neigh=neigh, sublattice=sublattice, plaquettes=plaquettes) 
+            S=S, neigh=neigh, sublattice=sublattice, plaquettes=plaquettes, &
+            rvec=rvec) 
     elseif (trim(Sim%lattice_type) == "chain") then 
         call init_lattice_chain(nsites=Sim%n_sites, S=S, neigh=neigh)    
         ! We need a dummy for plaquettes array so that the code does not crash    
@@ -276,25 +279,17 @@ program ssetfi
     allocate( J_interaction_matrix(S%Nsites,S%Nsites) )
     if(ignore_Jmatrix) then 
         J_interaction_matrix(:,:) = ZERO
-
-        if (trim(Sim%lattice_type) == "chain") then 
-            do ir = 1, S%nsites
-                do jr = 1, S%nsites
-                    if (ir /= jr) then 
-                        ! Rydberg interaction 1/r^6
-                        J_interaction_matrix(ir, jr) = + 1.0_dp / (abs(ir -jr)**6) + 1.0_dp / ((S%nsites - abs(ir- jr))**6)
-                    endif 
-                enddo         
-            enddo   
-            if (MPI_rank == root_rank) then 
-                ! Output Jmatrix as input for exact diagonalization code 
-                open(101, file="Jmatrix_Rydberg.txt", status="unknown", action="write")
-                do ir = 1, n_sites
-                    write(101, *) ( J_interaction_matrix(ir, jr), jr = 1, n_sites )
-                enddo 
-                close(101)
-            endif 
+        call init_Rydberg_interactions(S=S, Rb=Sim%Rb, &
+                Jmatrix=J_interaction_matrix)
+        if (MPI_rank == root_rank) then 
+            ! Output Jmatrix as input for exact diagonalization code 
+            open(101, file="Jmatrix_Rydberg.txt", status="unknown", action="write")
+            do ir = 1, n_sites
+                write(101, *) ( J_interaction_matrix(ir, jr), jr = 1, n_sites )
+            enddo 
+            close(101)
         endif 
+
 
     else
         if (MPI_rank == root_rank) then 
@@ -378,7 +373,7 @@ program ssetfi
         elsewhere 
             Jij_sign = 0
         endwhere        
-    else ! not translationally invariant system (e.g. for disorder realization)
+    else ! not translationally invariant system (e.g. for disorder realization or open BC)
         allocate( Jij_sign(1:S%Nsites, 1:S%Nsites) )
         where( J_interaction_matrix > 0 )
             Jij_sign = +1

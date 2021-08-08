@@ -400,8 +400,10 @@ module measurements
                 COparam = COparam + abs(COparam_) * l_nochange * factor 
 
                 ! Static structure factor 
-                call calc_static_Szq(S, Kgrid, spins_tmp, Szq_tmp)
-                Szq(:) = Szq(:) + Szq_tmp(:) * l_nochange * factor 
+                if( heavy_use ) then 
+                    call calc_static_Szq(S, Kgrid, spins_tmp, Szq_tmp)
+                    Szq(:) = Szq(:) + Szq_tmp(:) * l_nochange * factor 
+                endif 
 
                 spins_tmp(i1) = -spins_tmp(i1)
                 ! reset 
@@ -426,8 +428,10 @@ module measurements
         COparam = COparam * 3.0_dp / float(config%n_sites)
 
         ! Static structure factor 
-        call calc_static_Szq(S, Kgrid, spins_tmp, Szq_tmp)        
-        Szq(:) = Szq(:) + Szq_tmp(:) * l_nochange * factor 
+         if( heavy_use ) then
+            call calc_static_Szq(S, Kgrid, spins_tmp, Szq_tmp)        
+            Szq(:) = Szq(:) + Szq_tmp(:) * l_nochange * factor 
+         endif
 
         P0%meas(P0_ENERGY, tmp_idx) = energy
         P0%meas(P0_MAGNETIZATION, tmp_idx) = magnz2 ! magnz

@@ -8,7 +8,7 @@
     ! Their values are overwritten from the input file.
     ! **************************************************
 
-    type t_Simparams
+type t_Simparams
     real(dp) :: J_1 = +1.0_dp    
     real(dp) :: hx = 0.60_dp       ! transverse field (in units of J_1)
     real(dp) :: temp = 0.1_dp      ! temperature (in units of J_1)
@@ -29,6 +29,7 @@
     real(dp) :: hz = 0.1_dp  
     character(len=30) :: hz_fields_file = "hz_fields.txt"
     logical :: ignore_hz_fields = .FALSE.
+    real(dp) :: Rb                 ! Rydberg blockade radius
     ! (tuneable) hyperparameter of the algorithm with longitudinal field    
     real(dp) :: C_par_hyperparam = 0.1_dp  ! allowed range [0, +\infty]    
 end type
@@ -58,6 +59,8 @@ logical :: deterministic = .FALSE.
 real(dp) :: hz = 0.1_dp  
 character(len=30) :: hz_fields_file = "hz_fields.txt"
 logical :: ignore_hz_fields = .FALSE.
+! Rydberg blockade radius 
+real(dp) :: Rb = 1.0 
 ! (tuneable) hyperparameter of the algorithm with longitudinal field    
 real(dp) :: C_par_hyperparam = 0.1_dp  ! allowed range [0, +\infty]   
 ! *******************************************************************
