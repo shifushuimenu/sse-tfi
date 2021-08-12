@@ -160,7 +160,7 @@ program ssetfi
     NAMELIST /SIMPARAMS/ J_1, hx, temp, nx, ny, n_sites, nmeas_step, ntherm_step, Nbin, &
         lattice_type, ignore_Jmatrix, Jmatrix_file, translat_invar, paramscan, &
         scan_min, scan_max, heavy_use, deterministic, &
-        hz, hz_fields_file, ignore_hz_fields, Rb, C_par_hyperparam
+        hz, hz_fields_file, ignore_hz_fields, Rb, delta, Omega, C_par_hyperparam
 
 #if defined (USE_MPI)
     include "mpif.h"
@@ -198,6 +198,8 @@ program ssetfi
         hz = scan_min + MPI_rank * (scan_max - scan_min)/ float(MPI_size)        
     elseif(trim(paramscan) == "paramscan_T") then 
         temp = scan_min + MPI_rank * (scan_max - scan_min)/ float(MPI_size)
+    elseif(trim(paramscan) == "paramscan_delta") then 
+        delta = scan_min + MPI_rank * (scan_max - scan_min)/ float(MPI_size)
     elseif(trim(paramscan) == "paramscan_L") then 
         nx = 3 + 3 * MPI_rank
         ny = 3 + 3 * MPI_rank
@@ -238,6 +240,8 @@ program ssetfi
     Sim%hz_fields_file=hz_fields_file
     Sim%ignore_hz_fields=ignore_hz_fields
     Sim%Rb=Rb
+    Sim%delta = delta 
+    Sim%Omega = Omega 
     Sim%C_par_hyperparam=C_par_hyperparam
 
     if (nmeas_step < Nbin) then 
@@ -277,10 +281,11 @@ program ssetfi
     ! Nearest neighbour interactions are already taken care 
     ! of by the plaquette operators (for triangular lattice)
     allocate( J_interaction_matrix(S%Nsites,S%Nsites) )
+    allocate( hz_fields(1:S%Nsites) )
     if(ignore_Jmatrix) then 
         J_interaction_matrix(:,:) = ZERO
-        call init_Rydberg_interactions(S=S, Rb=Sim%Rb, &
-                Jmatrix=J_interaction_matrix)
+        call init_Rydberg_interactions(S=S, Sim=Sim, &
+                hz_fields=hz_fields, Jmatrix=J_interaction_matrix)
         if (MPI_rank == root_rank) then 
             ! Output Jmatrix as input for exact diagonalization code 
             open(101, file="Jmatrix_Rydberg.txt", status="unknown", action="write")
@@ -289,8 +294,6 @@ program ssetfi
             enddo 
             close(101)
         endif 
-
-
     else
         if (MPI_rank == root_rank) then 
             open(100, file=trim(Jmatrix_file), action="read", status="old")
@@ -387,9 +390,9 @@ program ssetfi
 
     ! read the site-dependent longitudinal fields from file 
     ! unless this field is to be ignored 
-    allocate( hz_fields(1:S%Nsites) )
     if( ignore_hz_fields ) then 
-        hz_fields(:) = hz
+        !!! hz_fields(:) = Sim%hz
+        ! hz_fields(:) is written in init_Rydberg_interactions()
     else
         if( MPI_rank == root_rank ) then 
             open(200, file=trim(hz_fields_file), action="read", status="old")
@@ -422,7 +425,7 @@ program ssetfi
     ! Precompute the probability tables from which diagonal operators 
     ! will be sampled. 
         call init_probtables( S=S, J_interaction_matrix=J_interaction_matrix, &
-        hx=hx, probtable=probtable, J_1=J_1, &
+        hx=Sim%hx, probtable=probtable, J_1=J_1, &
         n_plaquettes=config%n_plaquettes, TRANSLAT_INV=translat_invar, &
         hz_fields=hz_fields, C_par_hyperparam=C_par_hyperparam, spins=spins)
     ! J_interaction_matrix is not needed anymore.

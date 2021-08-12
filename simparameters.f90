@@ -22,14 +22,18 @@ type t_Simparams
     logical :: ignore_Jmatrix = .FALSE.
     character(len=30) :: Jmatrix_file = "Jmatrix.txt"
     logical :: translat_invar = .TRUE.
-    character(len=12) :: paramscan
+    character(len=20) :: paramscan
     real(dp) :: scan_min = 0.0, scan_max = 0.0
     logical :: heavy_use = .FALSE.
     logical :: deterministic = .FALSE.
     real(dp) :: hz = 0.1_dp  
     character(len=30) :: hz_fields_file = "hz_fields.txt"
     logical :: ignore_hz_fields = .FALSE.
+    ! Rydberg Hamiltonian
     real(dp) :: Rb                 ! Rydberg blockade radius
+    real(dp) :: delta              ! detuning 
+    real(dp) :: Omega              ! Rabi frequency
+    real(dp) :: Rydberg_energy_offset = 0.0_dp  ! due to Rydberg -> TFI mapping 
     ! (tuneable) hyperparameter of the algorithm with longitudinal field    
     real(dp) :: C_par_hyperparam = 0.1_dp  ! allowed range [0, +\infty]    
 end type
@@ -52,15 +56,17 @@ character(len=10) :: lattice_type = "triangular"
 logical :: ignore_Jmatrix = .FALSE.
 character(len=30) :: Jmatrix_file = "Jmatrix.txt"
 logical :: translat_invar = .TRUE.
-character(len=12) :: paramscan
+character(len=20) :: paramscan
 real(dp) :: scan_min = 0.0, scan_max = 0.0
 logical :: heavy_use = .FALSE.
 logical :: deterministic = .FALSE.
 real(dp) :: hz = 0.1_dp  
 character(len=30) :: hz_fields_file = "hz_fields.txt"
 logical :: ignore_hz_fields = .FALSE.
-! Rydberg blockade radius 
-real(dp) :: Rb = 1.0 
+real(dp) :: Rb = 1.0_dp                ! Rydberg blockade radius
+real(dp) :: delta = 1.0_dp             ! detuning 
+real(dp) :: Omega = 1.0_dp             ! Rabi frequency
+real(dp) :: Rydberg_energy_offset = 0.0_dp
 ! (tuneable) hyperparameter of the algorithm with longitudinal field    
 real(dp) :: C_par_hyperparam = 0.1_dp  ! allowed range [0, +\infty]   
 ! *******************************************************************

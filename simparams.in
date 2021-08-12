@@ -71,27 +71,30 @@
 !   rank (for production runs). 
 ! ========================================================
 &SIMPARAMS
-J_1 		= 0.0     ! +1.0
+J_1 		= 1.0     ! +1.0
 hx  		= 1.0     ! hx > 0 required
 hz              = 1.0      ! hz \in [-\infty, +\infty]; homogeneous longitudinal field
-temp 		= 0.5
-nx   		= 51
+temp 		= 0.4
+nx   		= 6
 ny   		= 1
-n_sites 	= 51
+n_sites 	= 6
 lattice_type = "chain"
 ignore_Jmatrix = T
-Jmatrix_file =  "J3x3_inplane.txt"  !"Jmatrix_nnAFM.txt" !"Jmatrix_kagome2x2_FM.dat"  !"Jmatrix_nnFM.dat"  "J3x3_inplane.txt" 
+Jmatrix_file =  "Jmat_6decay.txt" !"J3x3_inplane.txt"  !"Jmatrix_nnAFM.txt" !"Jmatrix_kagome2x2_FM.dat"  !"Jmatrix_nnFM.dat"  "J3x3_inplane.txt" 
 translat_invar = F
 ignore_hz_fields = T
 hz_fields_file = "hz_fields.txt"
+! Parameters of Rydberg Hamiltonian: this overwrites hx, hz 
 Rb = 1.2
+delta = -5.0
+Omega = 1.0
 C_par_hyperparam = 1.0
 ntherm_step = 10000
 nmeas_step  = 100000
 Nbin        = 10
 paramscan   = "paramscan_T"
-scan_min    = 1.5
-scan_max    = 10.0
+scan_min    = 0.1
+scan_max    = 2.0
 heavy_use   = F
 deterministic = F
 / 

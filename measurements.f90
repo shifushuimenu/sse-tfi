@@ -359,7 +359,8 @@ module measurements
         LL = config%LL
         Nsites = config%n_sites
 
-        energy = (- config%n_exp / Sim%beta + consts_added) / config%n_sites
+        energy = (- config%n_exp / Sim%beta + consts_added) / config%n_sites  &
+                 + Sim%Rydberg_energy_offset ! off-set per site 
     
         spins_tmp(:) = spins(:)
         l_nochange = 0
