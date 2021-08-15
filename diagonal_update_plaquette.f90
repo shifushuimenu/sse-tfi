@@ -29,8 +29,9 @@ type t_ProbTable
   real(dp) :: sum_all_diagmatrix_elements 
   integer :: n_opclass                           ! number of classes of diagonal operators to be chosen from in the diagonal update
   real(dp), allocatable :: cumprob_opclass(:)    ! cumulative sum of the probabilities to insert an operator from a certain class
-  integer, allocatable  :: idx_opclass(:)      ! integer indices for operator classes (used in the diagonal update)
-  real(dp), allocatable :: hz_matrix_element(:)  ! ( 2*abs(hz(i)) + C_par ) / ( 2*abs(hz(i)) + 2*C_par )
+  integer, allocatable  :: idx_opclass(:)        ! integer indices for operator classes (used in the diagonal update)
+  real(dp), allocatable :: hz_matrix_element(:)  ! ( 2*abs(hz(i)) + 2*C_par )
+  real(dp), allocatable :: hz_cumul(:)           ! cumulative probability table, hz_matrix_element(ir) are relative probabilities 
 
   ! needed for updating the probability tables 
   ! whenever the instantaneous spin configuration changes 
@@ -357,9 +358,13 @@ if( (i1 == 0).and.(i2 == 0) ) then
     ! For inhomogeneous longitudinal fields (variant 2)
     ! Probability tables need not be recomputed => better 
     ! --------------------------------------------------        
-    ! pick a site at random 
     call random_number(eta)
-    ii1 = int(eta * config%n_sites) + 1
+
+    ! ! homogeneous (in absolute value) field: pick a site at random 
+    ! ii1 = int(eta * config%n_sites) + 1
+    ! inhomogeneous (in magnitude and sign) field:
+
+    ii1 = binary_search(probtable%hz_cumul(:), eta)
 
     ! choose one of the matrix elements of hz at random 
     call random_number(eta)
@@ -452,8 +457,8 @@ endif !identity encountered
   ! Propagate spins as spin-flip operators are encountered.
   if ((i1.ne.0).and.(i2.eq.0)) then
     spins2(i1) = -spins2(i1)
-    call update_probtables(S=S, probtable=probtable, spins=spins2, &
-        C_par_hyperparam=C_par_hyperparam, hz_fields=hz_fields)
+!    call update_probtables(S=S, probtable=probtable, spins=spins2, &
+!        C_par_hyperparam=C_par_hyperparam, hz_fields=hz_fields)
     ! `sum_all_diagmatrix_elements` has changed => update 
     P_remove = float(( config%LL - config%n_exp + 1)) &
         / ( float(config%LL- config%n_exp + 1) + beta*probtable%sum_all_diagmatrix_elements )
@@ -653,6 +658,8 @@ allocate(probtable%cumprob_opclass(1:n_opclass))
 probtable%cumprob_opclass(:) = 0.0_dp
 allocate(probtable%hz_matrix_element(1:S%Nsites))
 probtable%hz_matrix_element(:) = 0.0_dp
+allocate(probtable%hz_cumul(1:S%nsites))
+probtable%hz_cumul(:) = 0.0_dp
 
 ! 1. The constants which have been added to the Hamiltonian artificially have to be
 ! subtracted from the energy in the end.
@@ -831,6 +838,14 @@ subroutine update_probtables(S, probtable, hz_fields, C_par_hyperparam, spins)
     ! REMOVE 
   enddo
   probtable%sum_all_diagmatrix_elements_peropclass(3) = sum(probtable%hz_matrix_element(:))
+
+  ! Cumulative probability table 
+  do ir = 1, S%nsites
+    probtable%hz_cumul(ir) = sum(probtable%hz_matrix_element(1:ir))
+  enddo 
+  probtable%hz_cumul(:) = probtable%hz_cumul(:) / sum(probtable%hz_matrix_element(:))
+
+  
   probtable%sum_all_diagmatrix_elements = sum(probtable%sum_all_diagmatrix_elements_peropclass(:))
     
     ! Probability for inserting an operator from one of the

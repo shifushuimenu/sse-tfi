@@ -286,6 +286,7 @@ program ssetfi
         J_interaction_matrix(:,:) = ZERO
         call init_Rydberg_interactions(S=S, Sim=Sim, &
                 hz_fields=hz_fields, Jmatrix=J_interaction_matrix)
+
         if (MPI_rank == root_rank) then 
             ! Output Jmatrix as input for exact diagonalization code 
             open(101, file="Jmatrix_Rydberg.txt", status="unknown", action="write")

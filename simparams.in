@@ -86,7 +86,7 @@ ignore_hz_fields = T
 hz_fields_file = "hz_fields.txt"
 ! Parameters of Rydberg Hamiltonian: this overwrites hx, hz 
 Rb = 1.2
-delta = -5.0
+delta = 2.0
 Omega = 1.0
 C_par_hyperparam = 1.0
 ntherm_step = 10000
@@ -94,7 +94,7 @@ nmeas_step  = 100000
 Nbin        = 10
 paramscan   = "paramscan_T"
 scan_min    = 0.1
-scan_max    = 2.0
+scan_max    = 10.0
 heavy_use   = F
 deterministic = F
 / 

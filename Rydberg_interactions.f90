@@ -27,13 +27,13 @@ contains
         case("chain")
 
             ! Rydberg -> TFI dictionary             
-            V0 =  Sim%Rb**6 / 4.0_dp !Sim%Omega * Sim%Rb**6 / 4.0_dp
+            V0 =  Sim%Omega * Sim%Rb**6 / 4.0_dp
             Jmatrix(:,:) = 0.0_dp
             do ir = 1, S%nsites
             do jr = 1, S%nsites 
                 if (ir .ne. jr) then 
                     ! NOT translationally invariant 
-                    Jmatrix(ir,jr) =  0.5*(V0 / (abs(ir -jr)**6) + V0 / ((S%nsites - abs(ir- jr))**6)) ! V0 / (abs(ir -jr)**6)
+                    Jmatrix(ir,jr) = V0 / (abs(ir -jr)**6) !  0.5*(V0 / (abs(ir -jr)**6) + V0 / ((S%nsites - abs(ir- jr))**6)) ! V0 / (abs(ir -jr)**6)
                 endif 
             enddo 
             enddo
@@ -56,10 +56,8 @@ contains
                 ss = ss + Jmatrix(ir,jr)
             enddo 
             enddo 
-            ! add this off-set to the final energy per site 
+            ! This off-set is added to the final energy per site 
             Sim%Rydberg_energy_offset = - Sim%delta / 2.0_dp + ss / float(S%nsites)
-
-            print*, "Rydberg energy offset ", Sim%Rydberg_energy_offset
 
         case default
             print*, "init_Rydberg_interactions(): Unknown lattice type"
